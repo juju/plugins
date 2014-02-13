@@ -5,6 +5,8 @@ These are a collection of plugins created by various authors to make using Juju 
 
 # Install
 
+Plugins are simply scripts that are prefixed with `juju-` which can be found within your system's `$PATH`. Whenever you type `juju <cmd>`, and `<cmd>` is not an internal command found in `juju help commands`, Juju attempts to execute `juju-<cmd>` within the context of your system's `$PATH` which is how the plugin system in Juju works. This repository is a collection of plugins in one place to make it easier to share and collaborate with other Juju users.
+
 ## Dependencies
 
 ### Ubuntu/Debian
