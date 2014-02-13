@@ -64,3 +64,7 @@ Optionally, you can remove the additional line in `~/.bash_profile` with the fol
 sed -ie '/PATH=\$PATH:\$HOME/.juju-plugins/d' ~/.bash_profile
 ```
 
+
+# Contributing
+
+Feel free to fork the repository and add new juju plugins! We only request that you licence each plugin via a copyright/licence header within each plugin file. We also require each plugin to be licenced with an [OSI approved licence](http://opensource.org/licenses).
