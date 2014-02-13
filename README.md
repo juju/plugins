@@ -77,7 +77,18 @@ This will fetch the latest from the repository and update current plugins and ad
 
 # Contributing
 
-Feel free to fork the repository and add new juju plugins! We only request that you licence each plugin via a copyright/licence header within each plugin file. We also require each plugin to be licenced with an [OSI approved licence](http://opensource.org/licenses).
+Feel free to fork the repository and add new juju plugins! We only request that you licence each plugin
+via a copyright/licence header within each plugin file. We also require each plugin to be licenced with
+an [OSI approved licence](http://opensource.org/licenses).
+
+It's also recommended you not hack directly in the `~/.juju-plugins` directory as this may break some plugins.
+Instead, clone to a different directory and test your plugins by running the following
+
+```
+PATH="$(pwd):$PATH" juju <plugin>
+```
+
+This will put your repo as the first PATH match and trump any other plugins in path.
 
 ## Plugin requirements
 
