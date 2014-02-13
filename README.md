@@ -64,6 +64,16 @@ Optionally, you can remove the additional line in `~/.bash_profile` with the fol
 sed -ie '/PATH=\$PATH:\$HOME/.juju-plugins/d' ~/.bash_profile
 ```
 
+# Updating
+
+You can update the plugins on your system at anytime by doing the following:
+
+```
+cd ~/.juju-plugins
+git pull
+```
+
+This will fetch the latest from the repository and update current plugins and add any new ones
 
 # Contributing
 
