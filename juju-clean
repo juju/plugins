@@ -1,0 +1,44 @@
+#!/bin/bash
+#
+# Copyright 2014 Marco Ceppi <marco@ceppi.net>
+#
+# juju-clean is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Charm Helpers is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# For a full copy of the GNU General Public License, see
+# <http://www.gnu.org/licenses/>.
+
+set -e
+
+JUJU_ENV=$1
+
+if [ ! "$JUJU_ENV" ]; then
+  echo "Please run juju cleanup <environment>"
+  exit 1
+fi
+
+if [ "$JUJU_ENV" == "--description" ]; then
+  echo "Destroy environment and clean any remaining files"
+  exit 0
+fi
+
+if [ "$JUJU_ENV" == "--help" ]; then
+  echo "juju clean [JUJU_ENV]"
+  echo ""
+  echo "Destroy the [JUJU_ENV] and remove any .jenv or local directories associated with the environment"
+  exit 0
+fi
+
+echo "Destroying '$JUJU_ENV' environment" >&2
+juju destroy-environment -y $JUJU_ENV >/dev/null 2>&1 || true
+echo "Removing any extra files" >&2
+rm -f ~/.juju/environments/$JUJU_ENV.jenv
+rm -rf ~/.juju/$JUJU_ENV || true
+echo "Clean and ready for bootstrap"
