@@ -1,0 +1,50 @@
+#!/bin/bash
+#
+# Copyright 2014 Marco Ceppi <marco@ceppi.net>
+#
+# juju-clean is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# Charm Helpers is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# For a full copy of the GNU General Public License, see
+# <http://www.gnu.org/licenses/>.
+
+set -x
+
+if [ "$1" == "--description" ]; then
+  echo "Resolve a unit and immediately launch debug hooks"
+  exit 0
+fi
+
+if [ "$1" == '--help' ]; then
+  echo "juju debug <unit>"
+  echo ""
+  echo "This will run juju resolved with the --retry flag and spawn a debug-hooks session in a new terminal"
+  exit 0
+fi
+
+unit="$1"
+
+if [ -z "$1" ]; then
+  echo "Must specify a unit!" >&2
+  exit 1
+fi
+
+echo "Launching debug hooks in a new terminal"
+x-terminal-emulator -e "juju debug-hooks $unit"
+
+sleep 2
+
+echo "Trying to resolve the unit..." >&2
+if ! juju resolved --retry $unit >/dev/null 2>&1; then
+  echo "Juju resolved fail, close debug-hooks window and try again"
+  exit 1
+fi
+
+echo "Close debug window when finished!"
