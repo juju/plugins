@@ -68,3 +68,7 @@ sed -ie '/PATH=\$PATH:\$HOME/.juju-plugins/d' ~/.bash_profile
 # Contributing
 
 Feel free to fork the repository and add new juju plugins! We only request that you licence each plugin via a copyright/licence header within each plugin file. We also require each plugin to be licenced with an [OSI approved licence](http://opensource.org/licenses).
+
+## Plugin requirements
+
+All plugins must be able to handle and respond to a `--help` flag and a `--description` flag. These are used by juju when a user runs `juju help plugins` and when a user runs `juju help <plugin>` they call the `--description` and `--help` flags respectively. Outside of that there aren't any language requirements, you're welcome to write your plugin in any language that's available in the Ubuntu system just so long as the source code isn't obfuscated.
