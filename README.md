@@ -14,7 +14,7 @@ Plugins are simply scripts that are prefixed with `juju-` which can be found wit
 Install Git
 
 ```
-sudo apt-get install git-core
+sudo apt-get install git
 ```
 
 ### Mac OSX
