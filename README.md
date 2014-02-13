@@ -46,7 +46,7 @@ echo 'PATH=$PATH:$HOME/.juju-plugins' >> ~/.bash_profile
 source ~/.bash_profile
 ```
 
-## Veify
+## Verify
 
 Once you've installed, run `juju help plugins` and you should see a list of additional plugins which weren't there prior to install
 
