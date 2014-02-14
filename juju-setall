@@ -1,0 +1,52 @@
+#!/bin/bash
+#
+# Copyright 2014 Marco Ceppi <marco@ceppi.net>
+#
+# juju-setall is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# juju-setall is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# For a full copy of the GNU General Public License, see
+# <http://www.gnu.org/licenses/>.
+
+set -e
+
+if [ "$1" == "--description" ]; then
+  echo "Set a configuration option across all services"
+  exit
+fi
+
+if [ "$1" == "--help" ]; then
+  echo "usage: juju setall [options] key=value ..."
+  echo "purpose: set config options across entire deployment"
+  echo
+  echo "options"
+  echo "-e, --environment (= '$(cat ~/.juju/current-environment)')"
+  echo "    juju environment to operate in"
+  echo
+  echo "Set one or more configuration options for all services in environment"
+  echo
+  echo "This will iterate over all services in deployed environment and attempt to set"
+  echo "all configuration keys for that service, if keys don't exist for that service"
+  echo "the command will silently continue to the next service."
+  exit
+fi
+
+if [ -z "$1" ]; then
+  echo "error: no configuration options specified" >&2
+  exit 1
+fi
+
+settings="$@"
+
+for i in "$(juju pprint -q)"; do
+  service=$(echo "$i" | awk -F/ '{print $1}')
+  echo "Setting '$settings' for $service" >&2
+  juju set $server $settings 2>/dev/null || true
+done
