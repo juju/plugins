@@ -1,0 +1,110 @@
+#!/bin/bash
+#
+# Copyright 2014 Joshua Strobl <joshua@stroblindustries.com>
+#
+# juju-git-charm is free software
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software distributed under the
+# License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS
+# OF ANY KIND, either express or implied. See the License for the specific language governing
+# permissions and limitations under the License.
+
+set -e # Stop if anything fails
+
+pluginCommand=$1 # The command that is used (--description, --help, --install or --update)
+charmName=$2 # The name of the charm
+gitRepo=$3 # The git repository
+ubuntuReleaseName=$4 # The Ubuntu release name
+gitFolder=$5 # The folder (or sub-sub-sub, etc. folder) in the git repo that holds the Juju charm
+
+if [ ! "$pluginCommand" ]; then # If nothing was specified, output help contents
+	pluginCommand="--help"
+fi
+
+if [ "$pluginCommand" == "--description" ]; then # If --description is the command
+	echo "Clone and keep up-to-date a git repository containing a Juju charm for easy source managing."
+	exit 0
+fi
+
+if [ "$pluginCommand" == "--help" ]; then # If --help is the command
+	echo "Command options: "
+	echo "juju-git-charm --install [name] [gitRepo] [ubuntuReleaseName] [gitFolder]"
+	echo "git pull [gitRepo] to ~/juju-git-charms/[ubuntuReleaseName]/[name] and either:"
+	echo "a) Automatically copy the contents to the equivelant ~/charms/[ubuntuReleaseName]"
+	echo "b) Copying the [gitFolder] (and any folders within it, you are allowed to specify a sub-folder) "
+	echo "to the equivelant ~/charms/[ubuntuReleaseName] directory"
+	echo ""
+	echo "juju-git-charm --update [name]"
+	echo "Update the charm via git where name is the name of the charm"
+	echo "~/charms/[ubuntuReleaseName] directory and/or update any folder that was specified "
+	echo "during install."
+	exit 0
+fi
+
+if [ "$pluginCommand" == "--install" ]; then # If we are installing a Juju charm via git
+	if [ ! "$charmName" ]; then # If there is no specified charm name, state error and exit
+		echo "Please add a name for the charm and retry the command."
+		exit 1
+	else
+		if [ ! "$gitRepo" ]; then # If there is no specified git repo, state error and exit
+			echo "Please add a git repository and retry the command."
+			exit 1
+		else # If there is a git repo specified
+			if [ ! "$ubuntuReleaseName" ]; then # If there is a git repo specified but NO Ubuntu release name, state error and exit
+				echo "Please specify the Ubuntu release name (ex. precise, quantal, raring, saucy) and retry the command."
+				exit 1
+			else # If there is a git repo specified AND an Ubuntu release name
+				mkdir -p ~/juju-git-charms/$charmName # Make the repository within a juju-git-charms folder
+				cd ~/juju-git-charms/$charmName
+			
+				echo 'ubuntuReleaseName="'$ubuntuReleaseName'"' > ~/juju-git-charms/.$charmName # Add the variable to a "hidden" file
+
+				git init #Initialize git in the repository
+				git remote add origin $gitRepo # Add the repo as an origin
+				git pull origin master # Pull from the origin master branch
+
+				mkdir -p ~/charms/$ubuntuReleaseName/ # Recursive make the necessary charms folders if they do not exist
+
+				if [ "$gitFolder" != "" ]; then # If a git folder is specified
+					echo 'gitFolder="'$gitFolder'"' >> ~/juju-git-charms/.$charmName # Add the variable to the config
+					cp -r $gitFolder ~/charms/$ubuntuReleaseName/ # Copy the folder recursively into the charms/ubuntuReleaseName dir
+				else # If a git folder is NOT specified
+					mkdir -p ~/charms/$ubuntuReleaseName/$charmName # Make a folder with the name of the repo
+					cp -r * ~/charms/$ubuntuReleaseName/$charmName # Copy all contents into it
+				fi
+			fi
+		fi
+	fi
+fi
+
+if [ "$pluginCommand" == "--update" ]; then # If we are updating a git repo
+	if [ ! "$charmName" ]; then # If a git repo is NOT specified
+		echo "Specify a git repository and retry the command."
+		exit 1
+	else # If a git repo is specified
+		cd ~/juju-git-charms/
+		source ~/juju-git-charms/.$charmName # Import the config contents
+
+		cd $charmName
+		echo "Updating the git repository..."
+		git pull origin master # Update the contents of the git repo
+		
+		echo "Re-installing the charm"
+		if [ "$gitFolder" != "" ]; then # If there IS a gitFolder in the config
+			cd ~/charms/$ubuntuReleaseName/$charmName
+			rm -rf * # Remove the existing charm
+			cd ~/juju-git-charms/$charmName/$gitFolder
+			cp -r * ~/charms/$ubuntuReleaseName/$charmName # Add new charm
+		else # If there is NOT a gitFolder in the config
+			cd ~/charms/$ubuntuReleaseName/$charmName
+			rm -rf * # Remove the existing charm (repo)
+			cd ~/juju-git-charms/$charmName
+			cp -r ~/charms/$ubuntuReleaseName/$charmName# Copy the contents 
+		fi
+		echo "Update and installation process finished."
+		exit 0
+	fi
+fi
