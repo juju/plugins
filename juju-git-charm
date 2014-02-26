@@ -32,7 +32,7 @@ fi
 if [ "$pluginCommand" == "--help" ]; then # If --help is the command
 	echo "Command options: "
 	echo "juju-git-charm --install [name] [gitRepo] [ubuntuReleaseName] [gitFolder]"
-	echo "git pull [gitRepo] to ~/juju-git-charms/[ubuntuReleaseName]/[name] and either:"
+	echo "git clone [gitRepo] to ~/juju-git-charms/[ubuntuReleaseName]/[name] and either:"
 	echo "a) Automatically copy the contents to the equivelant ~/charms/[ubuntuReleaseName]"
 	echo "b) Copying the [gitFolder] (and any folders within it, you are allowed to specify a sub-folder) "
 	echo "to the equivelant ~/charms/[ubuntuReleaseName] directory"
@@ -57,14 +57,14 @@ if [ "$pluginCommand" == "--install" ]; then # If we are installing a Juju charm
 				echo "Please specify the Ubuntu release name (ex. precise, quantal, raring, saucy) and retry the command."
 				exit 1
 			else # If there is a git repo specified AND an Ubuntu release name
-				mkdir -p ~/juju-git-charms/$charmName # Make the repository within a juju-git-charms folder
-				cd ~/juju-git-charms/$charmName
-			
+				mkdir -p ~/juju-git-charms # Make the repository within a juju-git-charms folder
+				cd ~/juju-git-charms/
+				git clone $gitRepo $charmName # Clone the repository
+
 				echo 'ubuntuReleaseName="'$ubuntuReleaseName'"' > ~/juju-git-charms/.$charmName # Add the variable to a "hidden" file
 
-				git init #Initialize git in the repository
-				git remote add origin $gitRepo # Add the repo as an origin
-				git pull origin master # Pull from the origin master branch
+				cd $charmname
+				git remote add upstream $gitRepo # Add the repo as upstream
 
 				mkdir -p ~/charms/$ubuntuReleaseName/ # Recursive make the necessary charms folders if they do not exist
 
@@ -90,7 +90,7 @@ if [ "$pluginCommand" == "--update" ]; then # If we are updating a git repo
 
 		cd $charmName
 		echo "Updating the git repository..."
-		git pull origin master # Update the contents of the git repo
+		git pull upstream master # Update the contents of the git repo
 		
 		echo "Re-installing the charm"
 		if [ "$gitFolder" != "" ]; then # If there IS a gitFolder in the config
