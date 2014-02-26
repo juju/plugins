@@ -63,7 +63,7 @@ if [ "$pluginCommand" == "--install" ]; then # If we are installing a Juju charm
 
 				echo 'ubuntuReleaseName="'$ubuntuReleaseName'"' > ~/juju-git-charms/.$charmName # Add the variable to a "hidden" file
 
-				cd $charmname
+				cd $charmName
 				git remote add upstream $gitRepo # Add the repo as upstream
 
 				mkdir -p ~/charms/$ubuntuReleaseName/ # Recursive make the necessary charms folders if they do not exist
