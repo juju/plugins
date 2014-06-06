@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+# vim: ts=4 sw=4 et
+# Copyright Canonical Ltd 2014, released under AGPL
+import yaml
+import time
+import sys
+
+from subprocess import check_output
+
+
+def my_call(args):
+    print(' '.join(args))
+    check_output(args)
+
+
+def status():
+    return yaml.load(check_output(['juju', 'status']))
+
+
+def wait_for(f):
+    while f():
+        time.sleep(0.5)
+
+
+def destroy_unit(to_destroy):
+    my_call(['juju', 'destroy-unit', to_destroy])
+
+    def is_alive():
+        for (name, service) in status().get('services', {}).items():
+            for uname in service.get('units', {}).keys():
+                if uname == to_destroy:
+                    return True
+        return False
+
+    wait_for(is_alive)
+
+
+def destroy_machine(to_destroy):
+    my_call(['juju', 'destroy-machine', '--force', to_destroy])
+
+    def is_alive():
+        for (mname, machine) in status()['machines'].items():
+            if mname == to_destroy:
+                return True
+            for container in machine.get('containers', {}).keys():
+                if container == to_destroy:
+                    return True
+        return False
+
+    wait_for(is_alive)
+
+
+def reap():
+    """ Reap juju: destroy any services with no units and any machines that are
+    not in use (including unused containers). """
+
+    st = status()
+
+    for (sname, service) in st.get('services').items():
+        if len(service.get('units', {})) == 0:
+            # We don't need to wait here, since nothing depends on the service.
+            my_call(['juju', 'destroy-service', sname])
+
+    def destroy_if_no_units(machine):
+        units, machines = find_me(machine)
+        if len(units) == 0 and len(machines) == 1:
+            my_call(['juju', 'destroy-machine', '--force', machine])
+
+    for (mname, machine) in st.get('machines', {}).items():
+        for container in machine.get('containers', {}).keys():
+            destroy_if_no_units(container)
+        destroy_if_no_units(mname)
+
+
+def find_me(thing):
+    """ Find all of the stuff that needs to be destroyed from the specified
+    thing. """
+    my_units = []
+    my_machines = []
+
+    st = status()
+
+    for (mname, machine) in st.get('machines', {}).items():
+        if thing == mname:
+            my_machines.append(thing)
+            my_machines.extend(machine.get('containers', {}).keys())
+
+        for cname in machine.get('containers', {}).keys():
+            if thing == cname:
+                my_machines.append(thing)
+
+    for (sname, service) in st.get('services', {}).items():
+        if sname == thing:
+            my_units.extend(service.get('units', {}).keys())
+
+        for (uname, unit) in service.get('units', {}).items():
+            if uname == thing:
+                my_units.append(uname)
+            if unit.get('machine', None) == thing:
+                my_units.append(uname)
+
+            # if this is on a container that is on a machine to be destroyed,
+            # we should destroy it too.
+            if unit['machine'] in my_machines:
+                my_units.append(uname)
+
+    return set(my_units), set(my_machines)
+
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        if sys.argv[1] == '--help':
+            print("juju kill [thing]")
+            print("where thing is any juju object (service, machine, container, unit).")
+            print("The plugin will reap all unused machines, services with no units, etc.")
+            sys.exit()
+        elif sys.argv[1] == '--description':
+            print("Destroy a juju object and reap the environment.")
+            sys.exit()
+
+    for thing in sys.argv[1:]:
+        units, machines = find_me(thing)
+        for unit in units:
+            destroy_unit(unit)
+        for machine in machines:
+            destroy_machine(machine)
+    reap()
