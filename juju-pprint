@@ -15,45 +15,9 @@
 # For a full copy of the GNU General Public License, see
 # <http://www.gnu.org/licenses/>.
 
-import os
 import sys
-import yaml
 
-import subprocess
-
-
-class ServiceUnit(object):
-    def __init__(self, name, unit_data):
-        self.name = name
-        self._data = {'public-address': '', 'open-ports': [], 'agent-state': '', 'subordinates': None}
-        self._data.update(unit_data)
-
-    def __getattr__(self, item):
-        return self._data[item.replace('_', '-')]
-
-    def __getitem__(self, item):
-        return self._data[item]
-
-
-def get_juju_status(juju_env=None):
-    cmd = ['juju', 'status']
-    if juju_env:
-        cmd.append(['-e', juju_env])
-    status_raw = subprocess.check_output(cmd)
-    return yaml.safe_load(status_raw)
-
-
-def print_unit(unit, indent=0, quiet=False):
-    status_line = "%s: %s %s (%s)"
-    if not quiet:
-        status_line = "%s- " + status_line
-    else:
-        indent = 0
-        status_line = "%s" + status_line
-
-    print status_line % (" " * indent, unit.name,
-                         unit['public-address'],
-                         ', '.join(unit['open-ports']), unit['agent-state'])
+from utils import get_units, print_unit
 
 
 def main():
@@ -70,17 +34,11 @@ def main():
     if '-q' in sys.argv:
         quiet = True
 
-    status = get_juju_status()
-
-    for service in status['services']:
-        if 'units' in status['services'][service]:
-            for u in status['services'][service]['units']:
-                unit = ServiceUnit(u, status['services'][service]['units'][u])
-                print_unit(unit, quiet=quiet)
-                if unit.subordinates:
-                    for s in unit.subordinates:
-                        sub = ServiceUnit(s, unit.subordinates[s])
-                        print_unit(sub, 2, quiet=quiet)
+    for unit in get_units():
+        if not unit.subordinate:
+            print_unit(unit, quiet=quiet)
+        else:
+            print_unit(unit, 2, quiet=quiet)
 
 
 if __name__ == "__main__":
