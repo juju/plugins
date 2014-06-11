@@ -1,0 +1,54 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# This plugin handles a connection to a remote python
+# debugger already started on a juju unit.
+
+# For more information about the python debugger, please
+# refer to 'charmhelpers/contrib/python/debug'
+
+
+from __future__ import print_function
+
+__author__ = 'Jorge Niedbalski R. <jorge.niedbalski@canonical.com>'
+
+import sys
+import subprocess
+
+from utils import get_units
+from optparse import OptionParser
+
+
+def warning(message):
+    print("WARNING: ", message, file=sys.stderr)
+    sys.exit(-1)
+
+
+def main(options):
+    unit = filter(lambda u: u.name == options.unit, get_units())
+
+    if not len(unit):
+        warning("Not found unit with name: %s" % options.unit)
+
+    unit = unit[0]
+
+    if not "{}/tcp".format(options.port) in unit.open_ports:
+        warning("Port:%s not opened on unit:%s" % (options.port, options.unit))
+
+    subprocess.check_output(["telnet", unit.public_address, options.port])
+
+
+def parse_options():
+    parser = OptionParser()
+    parser.add_option("-u", "--unit", dest="unit",
+                      help="Unit name to debug", metavar="unit")
+
+    parser.add_option("-p", "--port",
+                      dest="port", default="4444",
+                      help="Port on unit where Pdb is binded")
+
+    (options, args) = parser.parse_args()
+    return options
+
+if __name__ == "__main__":
+    main(parse_options())
