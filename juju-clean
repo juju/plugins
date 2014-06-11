@@ -38,7 +38,13 @@ fi
 
 echo "Destroying '$JUJU_ENV' environment" >&2
 juju destroy-environment -y $JUJU_ENV >/dev/null 2>&1 || true
+juju destroy-environment --force -y $JUJU_ENV >/dev/null 2>&1 || true
 echo "Removing any extra files" >&2
 rm -f ~/.juju/environments/$JUJU_ENV.jenv
 rm -rf ~/.juju/$JUJU_ENV || true
+echo "Checking for errors with local provider" >&2
+sudo rm -rf /var/lib/juju/locks/* || true
+sudo lxc-stop -n juju-precise-template && sudo lxc-destroy -n juju-precise-template || true
+sudo lxc-stop -n juju-trusty-template && sudo lxc-destroy -n juju-trusty-template || true
+sudo rm -rf /var/cache/lxc/cloud-* || true
 echo "Clean and ready for bootstrap"
