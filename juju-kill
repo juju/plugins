@@ -69,7 +69,9 @@ def reap():
     for (mname, machine) in st.get('machines', {}).items():
         for container in machine.get('containers', {}).keys():
             destroy_if_no_units(container)
-        destroy_if_no_units(mname)
+        # Never kill the bootstrap node.
+        if mname != "0":
+            destroy_if_no_units(mname)
 
 
 def find_me(thing):
