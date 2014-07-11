@@ -111,7 +111,7 @@ def find_me(thing):
 
             # if this is on a container that is on a machine to be destroyed,
             # we should destroy it too.
-            if unit['machine'] in my_machines:
+            if unit.get('machine', None) in my_machines:
                 my_units.add(uname)
 
         # if we've decided to destroy all the units, we should destroy the
