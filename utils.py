@@ -21,6 +21,14 @@ class ServiceUnit(object):
         return self._data[item]
 
 
+def juju_get(service, juju_env=None):
+    cmd = ['juju', 'get', service]
+    if juju_env:
+        cmd.append(['-e', juju_env])
+    status_raw = subprocess.check_output(cmd)
+    return yaml.safe_load(status_raw)
+
+
 def get_juju_status(juju_env=None):
     cmd = ['juju', 'status']
     if juju_env:
