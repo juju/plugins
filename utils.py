@@ -45,14 +45,29 @@ def get_units(subordinates=True):
     return units
 
 
-def print_unit(unit, indent=0, quiet=False):
-    status_line = "%s: %s %s (%s)"
+def get_max_lens(units, align):
+    if not align:
+        return (0, 0, 0)
+    max_name_len = 0
+    max_addr_len = 0
+    max_stat_len = 0
+    for unit in units:
+        max_name_len = max(len(unit.name), max_name_len)
+        max_addr_len = max(len(unit.public_address), max_addr_len)
+        max_stat_len = max(len(unit.agent_state), max_stat_len)
+    return max_name_len, max_addr_len, max_stat_len
+
+
+def print_unit(unit, indent=0, quiet=False, name_width=0, addr_width=0, stat_width=0):
+    status_line = "%-*s %-*s (%*s) %s"
     if not quiet:
         status_line = "%s- " + status_line
     else:
         indent = 0
         status_line = "%s" + status_line
 
-    print status_line % (" " * indent, unit.name,
-                         unit['public-address'],
-                         ', '.join(unit['open-ports']), unit['agent-state'])
+    print status_line % (" " * indent,
+                         name_width + 3 - indent, unit.name + ':',
+                         addr_width, unit.public_address,
+                         stat_width, unit.agent_state,
+                         ', '.join(unit.open_ports))

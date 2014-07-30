@@ -17,28 +17,33 @@
 
 import sys
 
-from utils import get_units, print_unit
+from utils import get_units, print_unit, get_max_lens
 
 
 def main():
-    quiet = False
     # I heard they invented this cool thing called argparse
     if '--description' in sys.argv:
         print "Collapsed, pretty version of juju status"
         sys.exit()
 
     if '--help' in sys.argv:
+        print "Usage: juju pprint [options]"
         print "Collapsed, pretty version of juju stats"
+        print ""
+        print "Options:"
+        print "  -q  Use quiet (super-condensed) mode"
+        print "  -a  Use aligned mode"
         sys.exit()
 
-    if '-q' in sys.argv:
-        quiet = True
+    quiet = '-q' in sys.argv
 
-    for unit in get_units():
-        if not unit.subordinate:
-            print_unit(unit, quiet=quiet)
-        else:
-            print_unit(unit, 2, quiet=quiet)
+    align = not quiet and '-a' in sys.argv
+
+    units = get_units()
+    name_width, addr_width, stat_width = get_max_lens(units, align)
+    for unit in units:
+        indent = 2 if unit.subordinate else 0
+        print_unit(unit, indent, quiet, name_width, addr_width, stat_width)
 
 
 if __name__ == "__main__":
