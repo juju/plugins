@@ -1,0 +1,23 @@
+#!/usr/bin/env python
+"""
+Usage:
+$ juju get-filter service config_entry
+
+"""
+import sys
+import pprint
+
+from utils import juju_get
+
+
+def main():
+    if not len(sys.argv) >= 2:
+        print >> sys.stderr, __doc__
+        sys.exit(-1)
+
+    (service, entry) = (sys.argv[1], sys.argv[2])
+    pprint.pprint(juju_get(service)['settings'].get(entry))
+
+
+if __name__ == "__main__":
+    main()
