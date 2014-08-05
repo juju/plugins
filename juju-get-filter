@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
 Usage:
-$ juju get-grep service config_entry
+$ juju get-filter service config_entry
 
 """
 import sys
