@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# Dirt simple plugin to get the current *public* address of a unit
+
+if [ "$1" = "--description" ]; then
+    echo "Get the public ip address of a unit"
+    exit 0
+fi
+
+if [ "$1" = "--help" ]; then
+    echo "usage: juju ip <unit>"
+    exit 0
+fi
+
+if [ -z "$1" ]; then
+    echo "You need to provide a unit name"
+    exit 1
+fi
+
+set -o pipefail
+juju status $1 | grep -F public-address | head -1 | awk '{print $2}'
+
+
+
+
+
+

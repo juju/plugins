@@ -1,0 +1,35 @@
+#!/bin/bash
+
+if [ "$1" == "--description" ]; then
+    echo "Rsync any local changes on unit to a directory"
+    exit 0
+fi
+
+if [ "$1" == "--help" ]; then
+    echo "usage: juju sync-charm UNIT [DIR]"
+    echo "  UNIT  Juju unit with local changes to charm"
+    echo "  DIR   Directory to rsync changes to. Default: ."
+    exit 0
+fi
+
+
+if [ -z "$1" ]
+then
+    echo "You must provide a unit name" >&2
+    exit 1
+fi
+
+UNIT=$1
+DIR=${2:-.}
+
+echo "WARNING: This will attempt to merge local changes to the charm on $UNIT into $DIR"
+read -p "Continue? [y/N] " doit
+if [ "${doit,,}" != "y" ]
+then
+    exit 1
+fi
+
+IP=$(juju stat $UNIT | grep -F public-address | head -1 | awk '{ print $2 }')
+UNITDIR="unit-$(echo $UNIT | sed 's#/#-#')"
+
+rsync -Wa --exclude revision --exclude .juju-charm -e ssh ubuntu@$IP:/var/lib/juju/agents/$UNITDIR/charm/ $DIR

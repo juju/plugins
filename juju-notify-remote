@@ -1,0 +1,23 @@
+#!/bin/bash
+set -o pipefail
+
+if [ "$1" = "--description" ]; then
+    echo "Run juju notify plugin on an environment on a remote server"
+    exit 0
+fi
+
+if [ "$1" = "--help" ]; then
+    echo "usage: juju notify-remote <server> <env> [juju notify args]"
+    exit 0
+fi
+
+
+remote=$1
+env=$2
+shift; shift
+
+notify_path=$(which juju-notify)
+remote_path=/tmp/juju-notify.py
+scp -q $notify_path $remote:$remote_path
+ssh -t $remote "python -u $remote_path --log $env" | juju notify $*
+
