@@ -1,0 +1,28 @@
+#!/bin/bash -i
+
+set -e
+
+if [ ! "$1" ]; then
+  echo "Need to supply an environment" >2
+  exit 1
+fi
+
+if [ "$1" == '--description' ]; then
+  echo "Switch your shells environment"
+  exit 0
+fi
+
+if [ "$1" == '--help' ]; then
+  echo "juju activate [juju-env]"
+  echo ""
+  echo "  juju-env - Juju environment to switch to"
+  exit 0
+fi
+
+if ! juju switch -l | grep "$1" > /dev/null; then
+  echo "Environment does not exist; have you executed `juju init` and edited ~/.juju/environments.yaml"
+  exit 1
+fi
+
+echo "Activating $1, to end session type 'exit'"
+env PS1="($1)$PS1" JUJU_ENV="$1" bash --norc -i
