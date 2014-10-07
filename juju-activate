@@ -1,26 +1,42 @@
 #!/bin/bash -i
+#
+# Copyright 2014 Marco Ceppi <marco@ceppi.net>
+#
+# juju-list is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# juju-activate is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# For a full copy of the GNU General Public License, see
+# <http://www.gnu.org/licenses/>.
 
+# This is a script for a juju plugin to activate a specific environment.
 set -e
 
 if [ ! "$1" ]; then
-  echo "Need to supply an environment" >2
+  echo "Need to supply an environment" >&2
   exit 1
 fi
 
 if [ "$1" == '--description' ]; then
-  echo "Switch your shells environment"
+  echo "Sets the JUJU_ENV to the requested Juju environment and updates the prompt."
   exit 0
 fi
 
 if [ "$1" == '--help' ]; then
-  echo "juju activate [juju-env]"
+  echo "juju activate <juju-env>"
   echo ""
-  echo "  juju-env - Juju environment to switch to"
+  echo "Set the JUJU_ENV to the requested Juju environment and update the command prompt."
   exit 0
 fi
 
 if ! juju switch -l | grep "$1" > /dev/null; then
-  echo "Environment does not exist; have you executed `juju init` and edited ~/.juju/environments.yaml"
+  echo "Environment does not exist; Have you executed `juju init` and edited ~/.juju/environments.yaml?" >&2
   exit 1
 fi
 
