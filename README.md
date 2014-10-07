@@ -77,12 +77,34 @@ This will fetch the latest from the repository and update current plugins and ad
 
 # Contributing
 
-Feel free to fork the repository and add new juju plugins! We only request that you licence each plugin
+We welcome contributions to create new juju plugins! We only request that you licence each plugin
 via a copyright/licence header within each plugin file. We also require each plugin to be licenced with
 an [OSI approved licence](http://opensource.org/licenses).
 
 It's also recommended you not hack directly in the `~/.juju-plugins` directory as this may break some plugins.
 Instead, clone to a different directory and test your plugins by running the following
+
+## Initial setup
+1. Fork the [juju/plugins](https://github.com/juju/plugins/fork) repsitory.
+1. Clone the fork you just made `git clone git@github.com:USER/plugins.git`
+1. Add the upstream repository `git remote add upstream https://github.com/juju/plugins.git`
+
+
+## Submitting changes
+1. Go to the master branch `git checkout master`
+1. Fetch the current content `git fetch upstream`
+1. Synchronize the upstream with master `git merge --ff-only upstream/master`
+1. Create a topic branch `git checkout -b TOPIC`
+1. Make your changes to the files.
+1. Stage files to be committed with `git add PATH/TO/FILE`
+1. Commit your changes `git commit`
+1. Push your changes to your repository `git push origin TOPIC`
+1. Open a pull request using the Github web interface:  
+   `https://github.com/USER/plugins/compare/juju:master...TOPIC`
+
+## Testing your changes
+In order to test plugins from your repository execute the following format in
+your terminal while within the plugins directory.
 
 ```
 PATH="$(pwd):$PATH" juju <plugin>
