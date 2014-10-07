@@ -1,0 +1,28 @@
+#!/bin/bash
+
+if [ "$1" == '--help' ]; then
+  echo "juju list"
+  echo ""
+  echo "Just run the command, find out how many environments are running"
+  exit 0
+fi
+
+if [ "$1" == '--description' ]; then
+  echo "Show bootstrapped environments"
+  exit 0
+fi
+
+envs=`juju switch -l`
+
+for e in $envs; do
+  if [ -f "$HOME/.juju/environments/$e.jenv" ]; then
+    states=`grep -A1 -ri "state-server" $HOME/.juju/environments/$e.jenv | tail -1`
+    if echo "$states" | egrep '^- (.*)' > /dev/null; then
+      echo ✔ $e
+    else
+      echo \? $e
+    fi
+  else
+    echo X $e
+  fi
+done
