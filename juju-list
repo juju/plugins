@@ -1,14 +1,34 @@
 #!/bin/bash
 
+#
+# Copyright 2014 Marco Ceppi <marco@ceppi.net>
+#
+# juju-list is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# juju-clean is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# For a full copy of the GNU General Public License, see
+# <http://www.gnu.org/licenses/>.
+
+# This is a script for a juju plugin to list the environments and status.
 if [ "$1" == '--help' ]; then
   echo "juju list"
   echo ""
-  echo "Just run the command, find out how many environments are running"
+  echo "Show the list of Juju environments and the bootstrapped status:"
+  echo "✔ = Bootstrapped"
+  echo "? = No state server, but the environment may be bootstrapped"
+  echo "X = Not running"
   exit 0
 fi
 
 if [ "$1" == '--description' ]; then
-  echo "Show bootstrapped environments"
+  echo "Show the list of Juju environments and the bootstrap status."
   exit 0
 fi
 
