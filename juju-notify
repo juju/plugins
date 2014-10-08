@@ -1,0 +1,133 @@
+#!/usr/bin/env python
+import sys
+import ast
+import os
+from time import sleep
+import json
+import subprocess
+import argparse
+from collections import namedtuple
+
+
+class Description(argparse.Action):
+    def __call__(self, *args, **kwargs):
+        print "Watch a juju environment for changes/error and notify user",
+        sys.exit(0)
+
+
+def parse():
+    parser = argparse.ArgumentParser(
+        description='Track and log/notify changes in Juju ENVIRONMENT')
+    parser.add_argument(
+        '--description',
+        action=Description,
+        nargs=0,
+        help="Output a short description of the command",
+    )
+    parser.add_argument(
+        '--all',
+        action='store_true',
+        help='track all state changes, not just error states',
+    )
+    parser.add_argument(
+        '--log',
+        action='store_true',
+        help='just log the changes, don\'t notify',
+    )
+    parser.add_argument(
+        'env',
+        nargs='?',
+        help='Juju environment to watch',
+    )
+    return parser.parse_args()
+
+
+def get_status(env):
+    status = subprocess.check_output(
+        ['juju', 'status', '-e', env, '--format=json'])
+    return json.loads(status)['services']
+
+
+StateChange = namedtuple('StateChange', 'env unit old new')
+
+
+def diff_state(env, old_status, new_status):
+    try:
+        for svc, svc_state in new_status.items():
+            if 'units' not in svc_state:
+                continue
+
+            for unit, unit_state in svc_state['units'].items():
+                new = unit_state['agent-state']
+                try:
+                    old = old_status[svc]['units'][unit]['agent-state']
+                except KeyError:
+                    yield StateChange(env, unit, None, new)
+                else:
+                    if old != new:
+                        yield StateChange(env, unit, old, new)
+    except KeyError as e:
+        print('Could not find: ', e)
+        return
+
+
+ICON_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), 'juju.png')
+)
+NOTIFY = ['notify-send', '-i', ICON_PATH]
+
+
+def watch_env(env):
+    last_status = get_status(env)
+    while 1:
+        sleep(5)
+        try:
+            new_status = get_status(env)
+        except subprocess.CalledProcessError:
+            continue
+
+        for diff in diff_state(env, last_status, new_status):
+            yield diff
+
+        last_status = new_status
+
+
+def watch_stdin():
+    line = sys.stdin.readline()
+    while line:
+        try:
+            data = ast.literal_eval(line.rstrip())
+            yield StateChange(*data)
+        except:
+            print(line.rstrip())
+        line = sys.stdin.readline()
+
+
+def notify(args, diff):
+    if args.log:
+        print(tuple(diff))
+        sys.stdout.flush()
+    elif args.all or diff.new == 'error':
+        print(diff)
+        cmd = NOTIFY + [
+            "%s juju env" % diff.env,
+            "%s: %s" % (diff.unit, diff.new)
+        ]
+        subprocess.check_call(cmd)
+
+
+if __name__ == '__main__':
+    try:
+        args = parse()
+        if os.isatty(sys.stdin.fileno()):
+            if not args.env:
+                print "You must supply an environment"
+                sys.exit(1)
+            watch = watch_env(args.env)
+        else:
+            watch = watch_stdin()
+
+        for diff in watch:
+            notify(args, diff)
+    except KeyboardInterrupt:
+        sys.exit()
