@@ -94,7 +94,7 @@ def find_me(thing):
 
         for cname in machine.get('containers', {}).keys():
             if thing == cname:
-                my_machines.append(thing)
+                my_machines.add(thing)
 
     for (sname, service) in st.get('services', {}).items():
         if sname == thing:
