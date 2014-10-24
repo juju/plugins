@@ -32,4 +32,6 @@ fi
 IP=$(juju stat $UNIT | grep -F public-address | head -1 | awk '{ print $2 }')
 UNITDIR="unit-$(echo $UNIT | sed 's#/#-#')"
 
-rsync -Wa --exclude revision --exclude .juju-charm -e ssh ubuntu@$IP:/var/lib/juju/agents/$UNITDIR/charm/ $DIR
+IDFILE=$JUJU_HOME/ssh/juju_id_rsa
+SSHOPTS="-i $IDFILE -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=ERROR"
+rsync -Wa --exclude revision --exclude .juju-charm -e "ssh $SSHOPTS" ubuntu@$IP:/var/lib/juju/agents/$UNITDIR/charm/ $DIR
