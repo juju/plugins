@@ -13,6 +13,12 @@ if [ "$1" == "--help" ]; then
 fi
 
 
+if [ "$1" == "-y" ]; then
+    FORCE=yes
+    shift
+fi
+
+
 if [ -z "$1" ]
 then
     echo "You must provide a unit name" >&2
@@ -22,11 +28,13 @@ fi
 UNIT=$1
 DIR=${2:-.}
 
-echo "WARNING: This will attempt to merge local changes to the charm on $UNIT into $DIR"
-read -p "Continue? [y/N] " doit
-if [ "${doit,,}" != "y" ]
-then
-    exit 1
+if [ -z "$FORCE" ]; then
+    echo "WARNING: This will attempt to merge local changes to the charm on $UNIT into $DIR"
+    read -p "Continue? [y/N] " doit
+    if [ "${doit,,}" != "y" ]
+    then
+        exit 1
+    fi
 fi
 
 IP=$(juju stat $UNIT | grep -F public-address | head -1 | awk '{ print $2 }')
