@@ -13,6 +13,12 @@ if [ "$1" == "--help" ]; then
 fi
 
 
+if [ "$1" == "-y" ]; then
+    FORCE=yes
+    shift
+fi
+
+
 if [ -z "$1" ]
 then
     echo "You must provide a unit name" >&2
@@ -22,14 +28,18 @@ fi
 UNIT=$1
 DIR=${2:-.}
 
-echo "WARNING: This will attempt to merge local changes to the charm on $UNIT into $DIR"
-read -p "Continue? [y/N] " doit
-if [ "${doit,,}" != "y" ]
-then
-    exit 1
+if [ -z "$FORCE" ]; then
+    echo "WARNING: This will attempt to merge local changes to the charm on $UNIT into $DIR"
+    read -p "Continue? [y/N] " doit
+    if [ "${doit,,}" != "y" ]
+    then
+        exit 1
+    fi
 fi
 
 IP=$(juju stat $UNIT | grep -F public-address | head -1 | awk '{ print $2 }')
 UNITDIR="unit-$(echo $UNIT | sed 's#/#-#')"
 
-rsync -Wa --exclude revision --exclude .juju-charm -e ssh ubuntu@$IP:/var/lib/juju/agents/$UNITDIR/charm/ $DIR
+IDFILE=$JUJU_HOME/ssh/juju_id_rsa
+SSHOPTS="-i $IDFILE -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=ERROR"
+rsync -Wa --exclude revision --exclude .juju-charm -e "ssh $SSHOPTS" ubuntu@$IP:/var/lib/juju/agents/$UNITDIR/charm/ $DIR
