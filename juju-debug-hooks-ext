@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import re
 import os
 import sys
 import yaml
@@ -7,7 +8,10 @@ import subprocess
 import itertools
 from optparse import OptionParser
 
+import jujuclient
 
+
+JUJU_ENV = os.environ['JUJU_ENV']
 JUJU_HOME = os.environ['JUJU_HOME']
 CONFIG_FILE = os.path.join(JUJU_HOME, 'debug-hooks-rc.yaml')
 DEFAULT_CONFIG = {'import_ids': [],
@@ -71,7 +75,7 @@ def show_desc(option, opt, value, parser):
 def parse_args():
     parser = OptionParser(add_help_option=False)
     parser.add_option('-c', '--config', dest='config_file', default=CONFIG_FILE)
-    parser.add_option('-e', '--environment', dest='env', default=None)
+    parser.add_option('-e', '--environment', dest='env', default=JUJU_ENV)
     parser.add_option('-j', '--join', dest='join', action='store_true')
     parser.add_option('-r', '--restart', dest='restart', action='store_true')
     parser.add_option('-s', '--sync', dest='sync', action='store_true')
@@ -80,14 +84,14 @@ def parse_args():
     return parser.parse_args()
 
 
-def customize(unit_name, unit_addr, opts):
+def customize(unit_name, unit, opts):
     config = dict(DEFAULT_CONFIG)
     if os.path.exists(os.path.expanduser(opts.config_file)):
         with open(os.path.expanduser(opts.config_file)) as fp:
             config = yaml.load(fp)
-    if check_customized(unit_name):
+    if check_customized(unit_name, unit, opts):
         return config
-    sys.stdout.write('Customizing environment...')
+    sys.stdout.write('Customizing machine...')
     sys.stdout.flush()
     for identity in config.get('import_ids', []):
         call('juju', 'authorized-keys', 'import', identity)
@@ -95,10 +99,10 @@ def customize(unit_name, unit_addr, opts):
     if isinstance(uploads, (list, tuple)):
         uploads = {u: '' for u in uploads}
     for local, remote in uploads.iteritems():
-        upload(unit_addr, local, remote)
+        upload(unit.get('public-address'), local, remote)
     if os.path.exists(os.path.expanduser(config.get('init', ''))):
-        upload(unit_addr, config['init'], '')
-    upload(unit_addr, os.path.join(os.path.dirname(__file__), 'jdhe-init.sh'),
+        upload(unit.get('public-address'), config['init'], '')
+    upload(unit.get('public-address'), os.path.join(os.path.dirname(__file__), 'jdhe-init.sh'),
            '.jdhe.init')
     call('juju', 'ssh', unit_name,
          'echo "JDHE_USER_INIT=\'%s\' ./.jdhe.init" >> .bashrc'
@@ -106,7 +110,30 @@ def customize(unit_name, unit_addr, opts):
     if config.get('use_tmux_bindings', False):
         call('juju', 'ssh', unit_name, 'touch .tmux.conf')
     print 'done.'
+    set_customized(unit_name, unit, opts)
     return config
+
+
+def check_customized(unit_name, unit, opts):
+    env = get_env(opts)
+    machine = unit.get('Machine')
+    annotations = env.get_annotation(machine, 'machine')
+    env.close()
+    return 'jdhe-customized' in annotations['Annotations']
+
+
+def set_customized(unit_name, unit, opts):
+    env = get_env(opts)
+    machine = unit.get('machine')
+    env.set_annotation(machine, 'machine', {'jdhe-customized': 'true'})
+    env.close()
+
+
+def get_env(opts):
+    if hasattr(get_env, '_env'):
+        return get_env._env
+    get_env._env = jujuclient.Environment.connect(opts.env)
+    return get_env._env
 
 
 def call(*args):
@@ -118,60 +145,40 @@ def call(*args):
         sys.exit(e.return_code)
 
 
-def check_customized(unit):
-    try:
-        subprocess.check_output(
-            ['/usr/bin/env', 'juju', 'ssh', unit, 'ls .jdhe.customized'],
-            stderr=subprocess.STDOUT)
-        return True
-    except subprocess.CalledProcessError as e:
-        if '.jdhe.customized' in e.output:
-            return False
-        else:
-            sys.stderr.write(e.output)
-            sys.exit(1)
-
-
-def get_unit_addr(unit):
-    status = yaml.safe_load(call('juju', 'status', unit))
-    services = status['services']
-    service = services[services.keys()[0]]
-    return service['units'][unit]['public-address']
-
-
 def find_errored_unit(units):
     for name, unit in units.items():
-        if unit['agent-state'] == 'error':
+        if unit['AgentState'] == 'error':
             return name
 
 
-def choose_unit(args):
+def choose_unit(args, opts):
     unit = args.pop(0) if args else None
-    status = yaml.safe_load(call('juju', 'status'))
-    services = status['services']
+    status = get_env(opts).status()
+    services = status['Services']
     all_units = {n: u
-                 for s in services.values() if 'units' in s
-                 for n, u in s['units'].items()}
+                 for s in services.values() if 'Units' in s
+                 for n, u in s['Units'].items()}
     units = all_units
     if unit in services:
-        units = services[unit]['units']
+        units = services[unit]['Units']
         unit = None
     if unit in units:
-        return unit, all_units[unit].get('public-address')
+        unit, all_units[unit]
     elif unit is not None:
-        sys.stderr.write('Invalid unit: %s' % unit)
+        sys.stderr.write('Invalid unit: %s\n' % unit)
         sys.exit(1)
     if len(units) == 1:
         unit = units.keys()[0]
-        return unit, all_units[unit].get('public-address')
+        return unit, all_units[unit]
     if os.path.exists('metadata.yaml'):
         with open('metadata.yaml') as fp:
             metadata = yaml.safe_load(fp)
             charm_name = metadata['name']
+        charm_name = re.compile(r'local:[^/]*/{}-\d+'.format(charm_name))
         for service in services.values():
-            if service['charm'] == charm_name:
-                service_units = sorted(service['units'].keys())
-                errored_unit = find_errored_unit(service['units'])
+            if charm_name.match(service['Charm']):
+                service_units = sorted(service['Units'].keys())
+                errored_unit = find_errored_unit(service['Units'])
                 unit = errored_unit or service_units[0]
                 break
         else:
@@ -187,9 +194,9 @@ def choose_unit(args):
     elif selection != '':
         unit = selection
     if unit not in all_units:
-        sys.stderr.write('Invalid unit: %s' % unit)
+        sys.stderr.write('Invalid unit: %s\n' % unit)
         sys.exit(1)
-    return unit, all_units[unit].get('public-address')
+    return unit, all_units[unit]
 
 
 def upload(addr, local, remote):
@@ -208,20 +215,14 @@ if __name__ == '__main__':
         addr = args[0]
         os.execvp('ssh', ['ssh', '-t', 'ubuntu@%s' % addr, 'sudo tmux a'])
     else:
-        unit_name, unit_addr = choose_unit(args)
-        if opts.env is not None:
-            env_opta = ['-e', opts.env]
-            env_opts = '-e "%s"' % opts.env
-        else:
-            env_opta = []
-            env_opts = ''
-        config = customize(unit_name, unit_addr, opts)
+        unit_name, unit = choose_unit(args, opts)
+        config = customize(unit_name, unit, opts)
         if opts.restart:
             subprocess.Popen(
-                'sleep 2 ; juju resolved --retry %s "%s"' % (env_opts, unit_name),
+                'sleep 2 ; juju resolved --retry -e %s "%s"' % (opts.env, unit_name),
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
         result = subprocess.call(
-            ['/usr/bin/env', 'juju', 'debug-hooks'] + env_opta + [unit_name] + args)
+            ['/usr/bin/env', 'juju', 'debug-hooks', '-e', opts.env] + [unit_name] + args)
         if result != 0:
             sys.exit(result)
         if opts.sync:
