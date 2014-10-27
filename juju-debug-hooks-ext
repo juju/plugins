@@ -1,0 +1,176 @@
+#!/usr/bin/env python
+
+import os
+import sys
+import yaml
+import subprocess
+from optparse import OptionParser
+
+
+JUJU_HOME = os.environ['JUJU_HOME']
+CONFIG_FILE = os.path.join(JUJU_HOME, 'debug-hooks-rc.yaml')
+DEFAULT_CONFIG = {'import_ids': [],
+                  'uploads': {},
+                  'init': os.path.join(JUJU_HOME, 'debug-hooks-rc.d'),
+                  'use_tmux_bindings': False,
+                  'sync_exclude': ['*.pyc', '.*']}
+
+
+def customize(unit, opts):
+    config = dict(DEFAULT_CONFIG)
+    if check_customized(unit):
+        return
+    sys.stdout.write('Customizing environment...')
+    sys.stdout.flush()
+    unit_addr = get_unit_addr(unit)
+    if os.path.exists(os.path.expanduser(opts.config_file)):
+        with open(os.path.expanduser(opts.config_file)) as fp:
+            config = yaml.load(fp)
+    for identity in config.get('import_ids', []):
+        subprocess.check_output(
+            ['/usr/bin/env', 'juju', 'authorized-keys', 'import', identity],
+            stderr=subprocess.STDOUT)
+    uploads = config.get('uploads', {})
+    if isinstance(uploads, (list, tuple)):
+        uploads = {u: '' for u in uploads}
+    for local, remote in uploads.iteritems():
+        upload(unit_addr, local, remote)
+    if os.path.exists(os.path.expanduser(config.get('init'))):
+        upload(unit_addr, config['init'], '')
+    upload(unit_addr, os.path.join(os.path.dirname(__file__), 'jdhe-init.sh'),
+           '.jdhe.init')
+    subprocess.check_output(
+        ['/usr/bin/env', 'juju', 'ssh', unit,
+         'echo "JDHE_USER_INIT=\'%s\' ./.jdhe.init" >> .bashrc'
+         % os.path.basename(config.get('init', ''))],
+        stderr=subprocess.STDOUT)
+    if config.get('use_tmux_bindings', False):
+        subprocess.check_output(
+            ['/usr/bin/env', 'juju', 'ssh', unit, 'touch .tmux.conf'],
+            stderr=subprocess.STDOUT)
+    print 'done.'
+    return config
+
+
+def check_customized(unit):
+    try:
+        subprocess.check_output(
+            ['/usr/bin/env', 'juju', 'ssh', unit, 'ls .jdhe.customized'],
+            stderr=subprocess.STDOUT)
+        return True
+    except subprocess.CalledProcessError as e:
+        if '.jdhe.customized' in e.output:
+            return False
+        else:
+            sys.stderr.write(e.output)
+            sys.exit(1)
+
+
+def get_unit_addr(unit):
+    status = yaml.safe_load(subprocess.check_output(
+        ['/usr/bin/env', 'juju', 'stat', unit]))
+    services = status['services']
+    service = services[services.keys()[0]]
+    return service['units'][unit]['public-address']
+
+
+def upload(addr, local, remote):
+    ssh_opts = '-i %s/ssh/juju_id_rsa -o UserKnownHostsFile=/dev/null ' \
+               '-o StrictHostKeyChecking=no -o LogLevel=ERROR' % JUJU_HOME
+    subprocess.check_output(
+        ['/usr/bin/env', 'rsync', '-Wa', '-e', 'ssh %s' % ssh_opts,
+         os.path.expanduser(local), 'ubuntu@%s:%s' % (addr, remote)])
+
+
+def parse_args():
+    parser = OptionParser(add_help_option=False)
+    parser.add_option('-c', '--config', dest='config_file', default=CONFIG_FILE)
+    parser.add_option('-e', '--environment', dest='env', default=None)
+    parser.add_option('-j', '--join', dest='join', action='store_true')
+    parser.add_option('-r', '--restart', dest='restart', action='store_true')
+    parser.add_option('-s', '--sync', dest='sync', action='store_true')
+    parser.add_option('-h', '--help', action='callback', callback=show_help)
+    parser.add_option('-d', '--description', action='callback', callback=show_desc)
+    return parser.parse_args()
+
+
+def show_desc(option, opt, value, parser):
+    print 'Enhanced interactive remote hook debugging session, using tmux'
+    sys.exit()
+
+
+def show_help(option, opt, value, parser):
+    print 'usage: juju debug-hooks-ext [options] <unit name> [hook names]'
+    print 'purpose: Enhanced interactive remote hook debugging session, using tmux'
+    print
+    print 'options:'
+    print '-c, --config (= "$JUJU_HOME/debug-hooks-rc.yaml")'
+    print '    yaml file to use for customizing the debug-hooks environment'
+    print '-e, --environment (= current)'
+    print '    juju environment to operate in'
+    print '-j, --join'
+    print '    join an existing remove debug session (useful for paired debugging)'
+    print '    does not use the Juju identity, so one of your ssh identities'
+    print '    must have been imported (e.g., with import_ids, below)'
+    print '-r, --restart'
+    print '    restart the failed hook, such that the session can debug it'
+    print '-s, --sync'
+    print '    sync changes to the charm from the remote unit back locally'
+    print '    this ensures that changes made while debugging the charm'
+    print '    are preserved'
+    print
+    print 'config file options:'
+    print 'import_ids'
+    print '    list of Launchpad user IDs to import into Juju to give access to'
+    print '    the remote debugging session (they should then use --join)'
+    print 'init'
+    print '    file or directory name containing script(s) to be run once to setup'
+    print '    a new machine; will create or append to a .bashrc file on the machine'
+    print 'sync_exclude'
+    print '    list of file patterns for --sync to exclude (see rysnc --exclude)'
+    print 'uploads'
+    print '    a key-value map of local to remote files or directories to upload'
+    print '    to the remote machine (this is only done once, and requires rsync)'
+    print 'use_tmux_bindings'
+    print '    create an empty .tmux.conf to reset tmux to its default key bindings'
+    print '    instead of using the screen bindings (note: this option has no effect'
+    print '    if a custom .tmux.conf file is created via the uploads or init options)'
+    print
+    print 'Note that the init script(s) will be run once, the first time the machine'
+    print 'is connected to.  If you wish to have setup that runs each time, you will'
+    print 'need to replace or append to the .bashrc file.  Also note that the init'
+    print 'script(s) will block the login process, so if you have setup tasks that'
+    print 'take a while to run, such as installing packages, you may want to run'
+    print 'them in the background.'
+    sys.exit()
+
+
+if __name__ == '__main__':
+    opts, args = parse_args()
+    if len(args) == 0:
+        sys.stderr.write('You must specify a unit\n')  # TODO: determine unit from local charm
+        sys.exit(1)
+    else:
+        unit = args[0]
+    if opts.join:
+        os.execvp('ssh', ['ssh', '-t', 'ubuntu@%s' % unit, 'sudo tmux a'])
+    else:
+        if opts.env is not None:
+            env_opta = ['-e', opts.env]
+            env_opts = '-e "%s"' % opts.env
+        else:
+            env_opta = []
+            env_opts = ''
+        config = customize(unit, opts)
+        if opts.restart:
+            subprocess.Popen(
+                'sleep 2 ; juju resolved --retry %s "%s"' % (env_opts, unit),
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+        result = subprocess.call(
+            ['/usr/bin/env', 'juju', 'debug-hooks'] + env_opta + args)
+        if result != 0:
+            sys.exit(result)
+        if opts.sync:
+            os.execvp('juju',
+                      ['juju', 'sync-charm', '-y', unit] +
+                      config.get('sync_exclude', []))  # TEST ME
