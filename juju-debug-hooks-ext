@@ -16,6 +16,69 @@ DEFAULT_CONFIG = {'import_ids': [],
                   'sync_exclude': ['*.pyc', '.*']}
 
 
+def show_help(option, opt, value, parser):
+    print 'usage: juju debug-hooks-ext [options] <unit name> [hook names]'
+    print 'purpose: Enhanced interactive remote hook debugging session, using tmux'
+    print
+    print 'options:'
+    print '-c, --config (= "$JUJU_HOME/debug-hooks-rc.yaml")'
+    print '    yaml file to use for customizing the debug-hooks environment'
+    print '-e, --environment (= current)'
+    print '    juju environment to operate in'
+    print '-j, --join'
+    print '    join an existing remove debug session (useful for paired debugging)'
+    print '    does not use the Juju identity, so one of your ssh identities'
+    print '    must have been imported (e.g., with import_ids, below)'
+    print '-r, --restart'
+    print '    restart the failed hook, such that the session can debug it'
+    print '-s, --sync'
+    print '    sync changes to the charm from the remote unit back locally'
+    print '    this ensures that changes made while debugging the charm'
+    print '    are preserved'
+    print
+    print 'config file options:'
+    print 'import_ids'
+    print '    list of Launchpad user IDs to import into Juju to give access to'
+    print '    the remote debugging session (they should then use --join)'
+    print 'init'
+    print '    file or directory name containing script(s) to be run once to setup'
+    print '    a new machine; will create or append to a .bashrc file on the machine'
+    print 'sync_exclude'
+    print '    list of file patterns for --sync to exclude (see rysnc --exclude)'
+    print 'uploads'
+    print '    a key-value map of local to remote files or directories to upload'
+    print '    to the remote machine (this is only done once, and requires rsync)'
+    print 'use_tmux_bindings'
+    print '    create an empty .tmux.conf to reset tmux to its default key bindings'
+    print '    instead of using the screen bindings (note: this option has no effect'
+    print '    if a custom .tmux.conf file is created via the uploads or init options)'
+    print
+    print 'Note that the init script(s) will be run once, the first time the machine'
+    print 'is connected to.  If you wish to have setup that runs each time, you will'
+    print 'need to replace or append to the .bashrc file.  Also note that the init'
+    print 'script(s) will block the login process, so if you have setup tasks that'
+    print 'take a while to run, such as installing packages, you may want to run'
+    print 'them in the background.'
+    sys.exit()
+
+
+def show_desc(option, opt, value, parser):
+    print 'Enhanced interactive remote hook debugging session, using tmux'
+    sys.exit()
+
+
+def parse_args():
+    parser = OptionParser(add_help_option=False)
+    parser.add_option('-c', '--config', dest='config_file', default=CONFIG_FILE)
+    parser.add_option('-e', '--environment', dest='env', default=None)
+    parser.add_option('-j', '--join', dest='join', action='store_true')
+    parser.add_option('-r', '--restart', dest='restart', action='store_true')
+    parser.add_option('-s', '--sync', dest='sync', action='store_true')
+    parser.add_option('-h', '--help', action='callback', callback=show_help)
+    parser.add_option('-d', '--description', action='callback', callback=show_desc)
+    return parser.parse_args()
+
+
 def customize(unit, opts):
     config = dict(DEFAULT_CONFIG)
     if check_customized(unit):
@@ -80,69 +143,6 @@ def upload(addr, local, remote):
     subprocess.check_output(
         ['/usr/bin/env', 'rsync', '-Wa', '-e', 'ssh %s' % ssh_opts,
          os.path.expanduser(local), 'ubuntu@%s:%s' % (addr, remote)])
-
-
-def parse_args():
-    parser = OptionParser(add_help_option=False)
-    parser.add_option('-c', '--config', dest='config_file', default=CONFIG_FILE)
-    parser.add_option('-e', '--environment', dest='env', default=None)
-    parser.add_option('-j', '--join', dest='join', action='store_true')
-    parser.add_option('-r', '--restart', dest='restart', action='store_true')
-    parser.add_option('-s', '--sync', dest='sync', action='store_true')
-    parser.add_option('-h', '--help', action='callback', callback=show_help)
-    parser.add_option('-d', '--description', action='callback', callback=show_desc)
-    return parser.parse_args()
-
-
-def show_desc(option, opt, value, parser):
-    print 'Enhanced interactive remote hook debugging session, using tmux'
-    sys.exit()
-
-
-def show_help(option, opt, value, parser):
-    print 'usage: juju debug-hooks-ext [options] <unit name> [hook names]'
-    print 'purpose: Enhanced interactive remote hook debugging session, using tmux'
-    print
-    print 'options:'
-    print '-c, --config (= "$JUJU_HOME/debug-hooks-rc.yaml")'
-    print '    yaml file to use for customizing the debug-hooks environment'
-    print '-e, --environment (= current)'
-    print '    juju environment to operate in'
-    print '-j, --join'
-    print '    join an existing remove debug session (useful for paired debugging)'
-    print '    does not use the Juju identity, so one of your ssh identities'
-    print '    must have been imported (e.g., with import_ids, below)'
-    print '-r, --restart'
-    print '    restart the failed hook, such that the session can debug it'
-    print '-s, --sync'
-    print '    sync changes to the charm from the remote unit back locally'
-    print '    this ensures that changes made while debugging the charm'
-    print '    are preserved'
-    print
-    print 'config file options:'
-    print 'import_ids'
-    print '    list of Launchpad user IDs to import into Juju to give access to'
-    print '    the remote debugging session (they should then use --join)'
-    print 'init'
-    print '    file or directory name containing script(s) to be run once to setup'
-    print '    a new machine; will create or append to a .bashrc file on the machine'
-    print 'sync_exclude'
-    print '    list of file patterns for --sync to exclude (see rysnc --exclude)'
-    print 'uploads'
-    print '    a key-value map of local to remote files or directories to upload'
-    print '    to the remote machine (this is only done once, and requires rsync)'
-    print 'use_tmux_bindings'
-    print '    create an empty .tmux.conf to reset tmux to its default key bindings'
-    print '    instead of using the screen bindings (note: this option has no effect'
-    print '    if a custom .tmux.conf file is created via the uploads or init options)'
-    print
-    print 'Note that the init script(s) will be run once, the first time the machine'
-    print 'is connected to.  If you wish to have setup that runs each time, you will'
-    print 'need to replace or append to the .bashrc file.  Also note that the init'
-    print 'script(s) will block the login process, so if you have setup tasks that'
-    print 'take a while to run, such as installing packages, you may want to run'
-    print 'them in the background.'
-    sys.exit()
 
 
 if __name__ == '__main__':
