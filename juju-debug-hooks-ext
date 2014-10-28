@@ -99,10 +99,10 @@ def customize(unit_name, unit, opts):
     if isinstance(uploads, (list, tuple)):
         uploads = {u: '' for u in uploads}
     for local, remote in uploads.iteritems():
-        upload(unit.get('public-address'), local, remote)
+        upload(unit.get('PublicAddress'), local, remote)
     if os.path.exists(os.path.expanduser(config.get('init', ''))):
-        upload(unit.get('public-address'), config['init'], '')
-    upload(unit.get('public-address'), os.path.join(os.path.dirname(__file__), 'jdhe-init.sh'),
+        upload(unit.get('PublicAddress'), config['init'], '')
+    upload(unit.get('PublicAddress'), os.path.join(os.path.dirname(__file__), 'jdhe-init.sh'),
            '.jdhe.init')
     call('juju', 'ssh', unit_name,
          'echo "JDHE_USER_INIT=\'%s\' ./.jdhe.init" >> .bashrc'
@@ -118,15 +118,13 @@ def check_customized(unit_name, unit, opts):
     env = get_env(opts)
     machine = unit.get('Machine')
     annotations = env.get_annotation(machine, 'machine')
-    env.close()
     return 'jdhe-customized' in annotations['Annotations']
 
 
 def set_customized(unit_name, unit, opts):
     env = get_env(opts)
-    machine = unit.get('machine')
+    machine = unit.get('Machine')
     env.set_annotation(machine, 'machine', {'jdhe-customized': 'true'})
-    env.close()
 
 
 def get_env(opts):
@@ -163,7 +161,7 @@ def choose_unit(args, opts):
         units = services[unit]['Units']
         unit = None
     if unit in units:
-        unit, all_units[unit]
+        return unit, all_units[unit]
     elif unit is not None:
         sys.stderr.write('Invalid unit: %s\n' % unit)
         sys.exit(1)
