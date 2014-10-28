@@ -142,7 +142,7 @@ def call(*args):
                                        stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
         sys.stderr.write(e.output)
-        sys.exit(e.return_code)
+        sys.exit(e.returncode)
 
 
 def find_errored_unit(units):
