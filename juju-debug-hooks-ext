@@ -34,6 +34,7 @@ def show_help(option, opt, value, parser):
     print '    join an existing remove debug session (useful for paired debugging)'
     print '    does not use the Juju identity, so one of your ssh identities'
     print '    must have been imported (e.g., with import_ids, below)'
+    print '    note that your customizations will not be made to joined sessions'
     print '-r, --restart'
     print '    restart the failed hook, such that the session can debug it'
     print '-s, --sync'
@@ -211,7 +212,7 @@ if __name__ == '__main__':
             sys.stderr.write('You must provide an address\n')
             sys.exit(1)
         addr = args[0]
-        os.execvp('ssh', ['ssh', '-t', 'ubuntu@%s' % addr, 'sudo tmux a'])
+        os.execvp('ssh', ['ssh', '-t', 'ubuntu@%s' % addr, 'sudo tmux new-session -A'])
     else:
         unit_name, unit = choose_unit(args, opts)
         config = customize(unit_name, unit, opts)
