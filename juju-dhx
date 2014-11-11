@@ -106,10 +106,10 @@ def customize(unit_name, unit, opts):
         upload(unit.get('PublicAddress'), local, remote)
     if os.path.exists(os.path.expanduser(config.get('init', ''))):
         upload(unit.get('PublicAddress'), config['init'], '')
-    upload(unit.get('PublicAddress'), os.path.join(os.path.dirname(__file__), 'jdhe-init.sh'),
-           '.jdhe.init')
+    upload(unit.get('PublicAddress'), os.path.join(os.path.dirname(__file__), 'dhx-init.sh'),
+           '.dhx.init')
     call('juju', 'ssh', unit_name,
-         'echo "JDHE_USER_INIT=\'%s\' ./.jdhe.init" >> .bashrc'
+         'echo "DHX_USER_INIT=\'%s\' ./.dhx.init" >> .bashrc'
          % os.path.basename(config.get('init', '')))
     if config.get('use_tmux_bindings', False):
         call('juju', 'ssh', unit_name, 'touch .tmux.conf')
@@ -122,13 +122,13 @@ def check_customized(unit_name, unit, opts):
     env = get_env(opts)
     machine = unit.get('Machine')
     annotations = env.get_annotation(machine, 'machine')
-    return 'jdhe-customized' in annotations['Annotations']
+    return 'dhx-customized' in annotations['Annotations']
 
 
 def set_customized(unit_name, unit, opts):
     env = get_env(opts)
     machine = unit.get('Machine')
-    env.set_annotation(machine, 'machine', {'jdhe-customized': 'true'})
+    env.set_annotation(machine, 'machine', {'dhx-customized': 'true'})
 
 
 def get_env(opts):
