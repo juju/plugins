@@ -232,4 +232,4 @@ if __name__ == '__main__':
             excludes = list(itertools.chain.from_iterable(
                 [('--exclude', e) for e in config.get('sync_exclude', [])]))
             os.execvp('juju',
-                      ['juju', 'sync-charm', '-y', unit_name, '.'] + excludes)  # TEST ME
+                      ['juju', 'sync-charm', '-y', unit_name, '.'] + excludes)
