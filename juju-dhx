@@ -84,7 +84,7 @@ def parse_args():
     parser = OptionParser(add_help_option=False)
     parser.add_option('-c', '--config', dest='config_file', default=CONFIG_FILE)
     parser.add_option('-e', '--environment', dest='env', default=JUJU_ENV)
-    parser.add_option('-i', '--import-id', dest='import_ids', action='append')
+    parser.add_option('-i', '--import-id', dest='import_ids', action='append', default=[])
     parser.add_option('-j', '--join', dest='join', action='store_true')
     parser.add_option('-r', '--restart', dest='restart', action='store_true')
     parser.add_option('-s', '--sync', dest='sync', action='store_true')
