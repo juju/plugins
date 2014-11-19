@@ -20,7 +20,7 @@ set -e
 JUJU_ENV=$1
 
 if [ ! "$JUJU_ENV" ]; then
-  echo "Please run juju cleanup <environment>"
+  echo "Please run juju clean <environment>"
   exit 1
 fi
 
