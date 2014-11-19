@@ -27,6 +27,8 @@ fi
 
 UNIT=$1
 DIR=${2:-.}
+shift
+shift
 
 if [ -z "$FORCE" ]; then
     echo "WARNING: This will attempt to merge local changes to the charm on $UNIT into $DIR"
@@ -42,4 +44,4 @@ UNITDIR="unit-$(echo $UNIT | sed 's#/#-#')"
 
 IDFILE=$JUJU_HOME/ssh/juju_id_rsa
 SSHOPTS="-i $IDFILE -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=ERROR"
-rsync -Wa --exclude revision --exclude .juju-charm -e "ssh $SSHOPTS" ubuntu@$IP:/var/lib/juju/agents/$UNITDIR/charm/ $DIR
+rsync -Wa --exclude revision --exclude .juju-charm "$@" -e "ssh $SSHOPTS" ubuntu@$IP:/var/lib/juju/agents/$UNITDIR/charm/ $DIR
