@@ -159,16 +159,27 @@ def find_errored_unit(units):
             return name
 
 
+def units_for_service(status, service_name):
+    units = {}
+    service = status['Services'][service_name]
+    if service.get('Units'):
+        units = service['Units']
+    if 'SubordinateTo' in service:
+        for sub_to in service['SubordinateTo']:
+            units.update(status['Services'][sub_to].get('Units', {}))
+    return units
+
+
 def choose_unit(args, opts):
     unit = args.pop(0) if args else None
     status = get_env(opts).status()
     services = status['Services']
     all_units = {n: u
-                 for s in services.values() if 'Units' in s
+                 for s in services.values() if s.get('Units')
                  for n, u in s['Units'].items()}
     units = all_units
     if unit in services:
-        units = services[unit]['Units']
+        units = units_for_service(status, unit) or all_units
         unit = None
     if unit in units:
         return unit, all_units[unit]
@@ -183,18 +194,23 @@ def choose_unit(args, opts):
             metadata = yaml.safe_load(fp)
             charm_name = metadata['name']
         charm_name = re.compile(r'local:[^/]*/{}-\d+'.format(charm_name))
-        for service in services.values():
+        for service_name, service in services.items():
             if charm_name.match(service['Charm']):
-                service_units = sorted(service['Units'].keys())
-                errored_unit = find_errored_unit(service['Units'])
-                unit = errored_unit or service_units[0]
-                break
+                service_units = units_for_service(status, service_name)
+                errored_unit = find_errored_unit(units)
+                if errored_unit:
+                    unit = errored_unit
+                    break
+                elif service_units:
+                    unit = sorted(service_units.keys())[0]
+                    break
         else:
             unit = find_errored_unit(all_units)
     unit_names = sorted(units.keys())
     print 'Units:'
     for i, unit_name in enumerate(unit_names):
-        print '%d: %s' % (i, unit_name)
+        print '  %d: %s' % (i, unit_name)
+    print
     selection = raw_input('Type or select a unit: %s' %
                           ('[%s] ' % unit if unit else ''))
     if selection.isdigit():
