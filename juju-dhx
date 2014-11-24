@@ -118,7 +118,7 @@ def customize(unit_name, unit, opts):
          'echo "DHX_USER_INIT=\'%s\' ./.dhx.init" >> .bashrc'
          % os.path.basename(config.get('init', '')))
     if config.get('use_tmux_bindings', False):
-        call('juju', 'ssh', unit_name, 'touch .tmux.conf')
+        call('juju', 'ssh', unit_name, 'sudo touch .tmux.conf')
     print 'done.'
     set_customized(unit_name, unit, opts)
     return config
