@@ -39,9 +39,7 @@ if [ -z "$FORCE" ]; then
     fi
 fi
 
-IP=$(juju stat $UNIT | grep -F public-address | head -1 | awk '{ print $2 }')
 UNITDIR="unit-$(echo $UNIT | sed 's#/#-#')"
+REMOTE_DIR="/var/lib/juju/agents/$UNITDIR/charm/"
 
-IDFILE=$JUJU_HOME/ssh/juju_id_rsa
-SSHOPTS="-i $IDFILE -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=ERROR"
-rsync -Wa --exclude revision --exclude .juju-charm "$@" -e "ssh $SSHOPTS" ubuntu@$IP:/var/lib/juju/agents/$UNITDIR/charm/ $DIR
+rsync -Wa --exclude revision --exclude .juju-charm "$@" -e "juju ssh --pty=false $UNIT" :$REMOTE_DIR $DIR

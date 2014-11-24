@@ -109,10 +109,10 @@ def customize(unit_name, unit, opts):
     if isinstance(uploads, (list, tuple)):
         uploads = {u: '' for u in uploads}
     for local, remote in uploads.iteritems():
-        upload(unit.get('PublicAddress'), local, remote)
+        upload(unit_name, local, remote)
     if os.path.exists(os.path.expanduser(config.get('init', ''))):
-        upload(unit.get('PublicAddress'), config['init'], '')
-    upload(unit.get('PublicAddress'), os.path.join(os.path.dirname(__file__), 'dhx-init.sh'),
+        upload(unit_name, config['init'], '')
+    upload(unit_name, os.path.join(os.path.dirname(__file__), 'dhx-init.sh'),
            '.dhx.init')
     call('juju', 'ssh', unit_name,
          'echo "DHX_USER_INIT=\'%s\' ./.dhx.init" >> .bashrc'
@@ -223,11 +223,9 @@ def choose_unit(args, opts):
     return unit, all_units[unit]
 
 
-def upload(addr, local, remote):
-    ssh_opts = '-i %s/ssh/juju_id_rsa -o UserKnownHostsFile=/dev/null ' \
-               '-o StrictHostKeyChecking=no -o LogLevel=ERROR' % JUJU_HOME
-    call('rsync', '-Wa', '-e', 'ssh %s' % ssh_opts,
-         os.path.expanduser(local), 'ubuntu@%s:%s' % (addr, remote))
+def upload(unit, local, remote):
+    call('rsync', '-Wa', '-e', 'juju ssh --pty=false %s' % unit,
+         os.path.expanduser(local), ':%s' % remote)
 
 
 if __name__ == '__main__':
