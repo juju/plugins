@@ -165,73 +165,96 @@ def call(*args):
 
 
 def find_errored_unit(units):
+    if not units:
+        return None
     for name, unit in units.items():
         if unit['AgentState'] == 'error':
             return name
+    return None
 
 
-def units_for_service(status, service_name):
+def units_for_service(services, service_name):
     units = {}
-    service = status['Services'][service_name]
+    service = services[service_name]
     if service.get('Units'):
         units = service['Units']
     if 'SubordinateTo' in service:
         for sub_to in service['SubordinateTo']:
-            units.update(status['Services'][sub_to].get('Units', {}))
+            units.update(services[sub_to].get('Units', {}))
+    units = {n: u for n, u in units.items()
+             if u.get('PublicAddress')}
     return units
+
+
+def fail(msg):
+    sys.stderr.write('%s\n' % msg)
+    sys.exit(1)
+
+
+def get_current_service_units(services):
+    if not os.path.exists('metadata.yaml'):
+        return None
+    with open('metadata.yaml') as fp:
+        metadata = yaml.safe_load(fp)
+        charm_name = metadata['name']
+    charm_name = re.compile(r'local:[^/]*/{}-\d+'.format(charm_name))
+    for service_name, service in services.items():
+        if charm_name.match(service['Charm']):
+            return units_for_service(services, service_name)
+    return None
+
+
+def choose_unit_from(all_units, preferred_units=None):
+    if len(all_units) == 1:
+        return all_units.items()[0]
+
+    default_unit = find_errored_unit(preferred_units)
+    if not default_unit:
+        default_unit = find_errored_unit(all_units)
+    if not default_unit and preferred_units:
+        default_unit = sorted(preferred_units.keys())[0]
+    if not default_unit:
+        default_unit = sorted(all_units.keys())[0]
+
+    unit_names = sorted(all_units.keys())
+    print 'Units:'
+    for i, unit_name in enumerate(unit_names):
+        print '  %d: %s' % (i, unit_name)
+    print
+    selection = raw_input('Type or select a unit: %s' %
+                          ('[%s] ' % default_unit or ''))
+    if selection.isdigit():
+        unit = unit_names[int(selection)]
+    elif selection == '':
+        unit = default_unit
+    else:
+        unit = selection
+    if unit not in all_units:
+        fail('Invalid unit: %s' % unit)
+    return unit, all_units[unit]
 
 
 def choose_unit(args, opts):
     unit = args.pop(0) if args else None
     status = get_env(opts).status()
     services = status['Services']
-    all_units = {n: u
-                 for s in services.values() if s.get('Units')
-                 for n, u in s['Units'].items()}
-    units = all_units
-    if unit in services:
-        units = units_for_service(status, unit) or all_units
-        unit = None
-    if unit in units:
-        return unit, all_units[unit]
-    elif unit is not None:
-        sys.stderr.write('Invalid unit: %s\n' % unit)
-        sys.exit(1)
-    if len(units) == 1:
-        unit = units.keys()[0]
-        return unit, all_units[unit]
-    if os.path.exists('metadata.yaml'):
-        with open('metadata.yaml') as fp:
-            metadata = yaml.safe_load(fp)
-            charm_name = metadata['name']
-        charm_name = re.compile(r'local:[^/]*/{}-\d+'.format(charm_name))
-        for service_name, service in services.items():
-            if charm_name.match(service['Charm']):
-                service_units = units_for_service(status, service_name)
-                errored_unit = find_errored_unit(units)
-                if errored_unit:
-                    unit = errored_unit
-                    break
-                elif service_units:
-                    unit = sorted(service_units.keys())[0]
-                    break
-        else:
-            unit = find_errored_unit(all_units)
-    unit_names = sorted(units.keys())
-    print 'Units:'
-    for i, unit_name in enumerate(unit_names):
-        print '  %d: %s' % (i, unit_name)
-    print
-    selection = raw_input('Type or select a unit: %s' %
-                          ('[%s] ' % unit if unit else ''))
-    if selection.isdigit():
-        unit = unit_names[int(selection)]
-    elif selection != '':
-        unit = selection
-    if unit not in all_units:
-        sys.stderr.write('Invalid unit: %s\n' % unit)
-        sys.exit(1)
-    return unit, all_units[unit]
+    units = {n: u
+             for s in services.values() if s.get('Units')
+             for n, u in s['Units'].items()}
+    if not units:
+        fail('No units available')
+    if unit in units:  # explicit unit given
+        return unit, units[unit]
+    elif unit in services:  # explicit service given
+        units = units_for_service(services, service_name=unit)
+        if not units:
+            fail('No units available for service: %s' % unit)
+        return choose_unit_from(units)
+    elif unit:
+        fail('Invalid unit: %s' % unit)
+    else:
+        preferred_units = get_current_service_units(services)
+        return choose_unit_from(units, preferred_units)
 
 
 def upload(unit, local, remote):
@@ -243,8 +266,7 @@ if __name__ == '__main__':
     opts, args = parse_args()
     if opts.join:
         if len(args) == 0:
-            sys.stderr.write('You must provide an address\n')
-            sys.exit(1)
+            fail('You must provide an address')
         addr = args[0]
         os.execvp('ssh', ['ssh', '-t', 'ubuntu@%s' % addr, 'sudo tmux new-session -A'])
     else:
