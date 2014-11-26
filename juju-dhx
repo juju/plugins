@@ -18,6 +18,7 @@ DEFAULT_CONFIG = {'import_ids': [],
                   'uploads': {},
                   'init': os.path.join(JUJU_HOME, 'debug-hooks-rc.d'),
                   'use_tmux_bindings': False,
+                  'auto_sync': False,
                   'sync_exclude': ['*.pyc', '.*']}
 
 
@@ -45,23 +46,27 @@ def show_help(option, opt, value, parser):
     print '    sync changes to the charm from the remote unit back locally'
     print '    this ensures that changes made while debugging the charm'
     print '    are preserved'
+    print '-S, --no-sync'
+    print '    do not sync changes, even if auto_sync is true or --sync is given'
     print
     print 'config file options:'
-    print 'import_ids'
-    print '    list of Launchpad user IDs to import into Juju to give access to'
-    print '    the remote debugging session (they should then use --join)'
-    print 'init'
-    print '    file or directory name containing script(s) to be run once to setup'
-    print '    a new machine; will create or append to a .bashrc file on the machine'
-    print 'sync_exclude'
-    print '    list of file patterns for --sync to exclude (see rysnc --exclude)'
-    print 'uploads'
-    print '    a key-value map of local to remote files or directories to upload'
-    print '    to the remote machine (this is only done once, and requires rsync)'
     print 'use_tmux_bindings'
     print '    create an empty .tmux.conf to reset tmux to its default key bindings'
     print '    instead of using the screen bindings (note: this option has no effect'
     print '    if a custom .tmux.conf file is created via the uploads or init options)'
+    print 'init'
+    print '    file or directory name containing script(s) to be run once to setup'
+    print '    a new machine; will create or append to a .bashrc file on the machine'
+    print 'uploads'
+    print '    a key-value map of local to remote files or directories to upload'
+    print '    to the remote machine (this is only done once, and requires rsync)'
+    print 'import_ids'
+    print '    list of Launchpad user IDs to import into Juju to give access to'
+    print '    the remote debugging session (they should then use --join)'
+    print 'auto_sync'
+    print '    always assume the --sync option'
+    print 'sync_exclude'
+    print '    list of file patterns for --sync to exclude (see rysnc --exclude)'
     print
     print 'Note that the init script(s) will be run once, the first time the machine'
     print 'is connected to.  If you wish to have setup that runs each time, you will'
@@ -88,6 +93,7 @@ def parse_args():
     parser.add_option('-j', '--join', dest='join', action='store_true')
     parser.add_option('-r', '--restart', dest='restart', action='store_true')
     parser.add_option('-s', '--sync', dest='sync', action='store_true')
+    parser.add_option('-S', '--no-sync', dest='no_sync', action='store_true')
     parser.add_option('-h', '--help', action='callback', callback=show_help)
     parser.add_option('-d', '--description', action='callback', callback=show_desc)
     return parser.parse_args()
@@ -247,7 +253,7 @@ if __name__ == '__main__':
             ['/usr/bin/env', 'juju', 'debug-hooks', '-e', opts.env] + [unit_name] + args)
         if result != 0:
             sys.exit(result)
-        if opts.sync:
+        if (opts.sync or config.get('auto_sync', False)) and not opts.no_sync:
             print 'Syncing remote changes...'
             excludes = list(itertools.chain.from_iterable(
                 [('--exclude', e) for e in config.get('sync_exclude', [])]))
