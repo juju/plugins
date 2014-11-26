@@ -219,7 +219,10 @@ def choose_unit_from(all_units, preferred_units=None):
     unit_names = sorted(all_units.keys())
     print 'Units:'
     for i, unit_name in enumerate(unit_names):
-        print '  %d: %s' % (i, unit_name)
+        unit_err = ''
+        if all_units[unit_name]['AgentState'] == 'error':
+            unit_err = ' (error)'
+        print '  %d: %s%s' % (i, unit_name, unit_err)
     print
     selection = raw_input('Type or select a unit: %s' %
                           ('[%s] ' % default_unit or ''))
