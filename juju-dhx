@@ -19,6 +19,7 @@ DEFAULT_CONFIG = {'import_ids': [],
                   'init': os.path.join(JUJU_HOME, 'debug-hooks-rc.d'),
                   'use_tmux_bindings': False,
                   'auto_sync': False,
+                  'auto_restart': False,
                   'sync_exclude': ['*.pyc', '.*']}
 
 
@@ -42,6 +43,9 @@ def show_help(option, opt, value, parser):
     print '    note that your customizations will not be made to joined sessions'
     print '-r, --restart'
     print '    restart the failed hook, such that the session can debug it'
+    print '-R, --no-restart'
+    print '    do not restart the failed hook, even if auto_restart is true or'
+    print '    --restart is given'
     print '-s, --sync'
     print '    sync changes to the charm from the remote unit back locally'
     print '    this ensures that changes made while debugging the charm'
@@ -92,6 +96,7 @@ def parse_args():
     parser.add_option('-i', '--import-id', dest='import_ids', action='append', default=[])
     parser.add_option('-j', '--join', dest='join', action='store_true')
     parser.add_option('-r', '--restart', dest='restart', action='store_true')
+    parser.add_option('-R', '--no-restart', dest='no_restart', action='store_true')
     parser.add_option('-s', '--sync', dest='sync', action='store_true')
     parser.add_option('-S', '--no-sync', dest='no_sync', action='store_true')
     parser.add_option('-h', '--help', action='callback', callback=show_help)
@@ -245,7 +250,7 @@ if __name__ == '__main__':
     else:
         unit_name, unit = choose_unit(args, opts)
         config = customize(unit_name, unit, opts)
-        if opts.restart:
+        if (opts.restart or config.get('auto_restart', False)) and not opts.no_restart:
             subprocess.Popen(
                 'sleep 2 ; juju resolved --retry -e %s "%s"' % (opts.env, unit_name),
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
