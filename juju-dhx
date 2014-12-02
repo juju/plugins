@@ -193,16 +193,27 @@ def fail(msg):
     sys.exit(1)
 
 
-def get_current_service_units(services):
+def current_charm_name():
     if not os.path.exists('metadata.yaml'):
         return None
     with open('metadata.yaml') as fp:
         metadata = yaml.safe_load(fp)
-        charm_name = metadata['name']
-    charm_name = re.compile(r'local:[^/]*/{}-\d+'.format(charm_name))
-    for service_name, service in services.items():
-        if charm_name.match(service['Charm']):
-            return units_for_service(services, service_name)
+        return metadata['name']
+
+
+def parse_charm_id(charm_id):
+    charm_match = re.match(r'local:[^/]*/(.*)-\d+', charm_id)
+    if charm_match:
+        return charm_match.group(1)
+    return None
+
+
+def get_current_service_units(services):
+    charm_name = current_charm_name()
+    if charm_name:
+        for service_name, service in services.items():
+            if parse_charm_id(service['Charm']) == charm_name:
+                return units_for_service(services, service_name)
     return None
 
 
@@ -243,7 +254,7 @@ def choose_unit(args, opts):
     unit = args.pop(0) if args else None
     status = get_env(opts).status()
     services = status['Services']
-    units = {n: u
+    units = {n: dict(u, Charm=s.get('Charm'))
              for s in services.values() if s.get('Units')
              for n, u in s['Units'].items()}
     if not units:
@@ -286,8 +297,13 @@ if __name__ == '__main__':
         if result != 0:
             sys.exit(result)
         if (opts.sync or config.get('auto_sync', False)) and not opts.no_sync:
-            print 'Syncing remote changes...'
-            excludes = list(itertools.chain.from_iterable(
-                [('--exclude', e) for e in config.get('sync_exclude', [])]))
-            os.execvp('juju',
-                      ['juju', 'sync-charm', '-y', unit_name, '.'] + excludes)
+            local_charm = current_charm_name()
+            remote_charm = parse_charm_id(unit['Charm'])
+            if remote_charm == local_charm:
+                print 'Syncing remote changes...'
+                excludes = list(itertools.chain.from_iterable(
+                    [('--exclude', e) for e in config.get('sync_exclude', [])]))
+                os.execvp('juju',
+                          ['juju', 'sync-charm', '-y', unit_name, '.'] + excludes)
+            elif opts.sync:
+                print "Unable to sync remote changes: remote charm doesn't match current directory"
