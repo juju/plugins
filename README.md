@@ -11,16 +11,10 @@ Plugins are simply scripts that are prefixed with `juju-` which can be found wit
 
 ### Ubuntu/Debian
 
-Install Git
+Install Git and python-jujuclient
 
 ```
-sudo apt-get install git
-```
-
-Install python-jujuclient
-
-```
-sudo apt-get install python-jujuclient
+sudo apt-get install git python-jujuclient
 ```
 
 ### Mac OSX
