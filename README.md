@@ -17,6 +17,12 @@ Install Git
 sudo apt-get install git
 ```
 
+Install python-jujuclient
+
+```
+sudo apt-get install python-jujuclient
+```
+
 ### Mac OSX
 
 Install Homebrew
@@ -29,6 +35,12 @@ Install Git
 
 ```
 brew install git
+```
+
+Install jujuclient
+
+```
+sudo pip install jujuclient>=0.18.4
 ```
 
 ## Fetch Source
