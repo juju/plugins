@@ -250,13 +250,26 @@ def choose_unit_from(all_units, preferred_units=None):
     return unit, all_units[unit]
 
 
+def get_all_units(status):
+    services = status['Services']
+    units = {n: dict(u, Charm=s.get('Charm'))
+             for s in services.values() if s.get('Units')
+             for n, u in s['Units'].iteritems()}
+    subordinates = {}
+    for name, unit in units.iteritems():
+        subs = unit.get('Subordinates') or {}
+        for sub_name, sub_unit in subs.iteritems():
+            sub_unit['Machine'] = unit['Machine']
+            subordinates[sub_name] = sub_unit
+    units.update(subordinates)
+    return units
+
+
 def choose_unit(args, opts):
     unit = args.pop(0) if args else None
     status = get_env(opts).status()
     services = status['Services']
-    units = {n: dict(u, Charm=s.get('Charm'))
-             for s in services.values() if s.get('Units')
-             for n, u in s['Units'].items()}
+    units = get_all_units(status)
     if not units:
         fail('No units available')
     if unit in units:  # explicit unit given
