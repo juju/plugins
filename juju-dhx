@@ -305,7 +305,7 @@ if __name__ == '__main__':
         if len(args) == 0:
             fail('You must provide an address')
         addr = args[0]
-        os.execvp('ssh', ['ssh', '-t', 'ubuntu@%s' % addr, 'sudo tmux new-session -A'])
+        os.execvp('ssh', ['ssh', '-t', 'ubuntu@%s' % addr, 'sudo tmux attach'])
     else:
         unit_name, unit = choose_unit(args, opts)
         config = customize(unit_name, unit, opts)
