@@ -18,6 +18,7 @@
 set -e
 
 JUJU_ENV=$1
+JUJU_HOME=${JUJU_HOME:-~/.juju}
 
 if [ ! "$JUJU_ENV" ]; then
   echo "Please run juju clean <environment>"
@@ -40,17 +41,16 @@ echo "Destroying '$JUJU_ENV' environment" >&2
 juju destroy-environment -y $JUJU_ENV >/dev/null 2>&1 || true
 juju destroy-environment --force -y $JUJU_ENV >/dev/null 2>&1 || true
 
-echo "Removing any extra files" >&2
-echo "WARNING: This plugin does not handle encrypted home directories yet." >&2
-rm -f ~/.juju/environments/$JUJU_ENV.jenv
-rm -rf ~/.juju/$JUJU_ENV || true
+echo "Removing any extra environment files in '${JUJU_HOME}'" >&2
+rm -f ~/${JUJU_HOME}/environments/$JUJU_ENV.jenv
+rm -rf ~/${JUJU_HOME}/$JUJU_ENV || true
 
 echo "Checking for errors with local provider" >&2
 
 echo "Stopping juju daemons" >&2
 for jujudaemon in $(sudo initctl list | grep juju | cut -d ' ' -f 1)
 do
-    sudo stop ${jujudaemon}
+    sudo stop ${jujudaemon} || true
 done
 echo "Destroying juju template containers" >&2
 for container in $(sudo lxc-ls | grep -e "^juju.*template$" )
