@@ -111,13 +111,12 @@ def customize(unit_name, unit, opts):
     if os.path.exists(os.path.expanduser(opts.config_file)):
         with open(os.path.expanduser(opts.config_file)) as fp:
             config = yaml.load(fp)
+    import_ids = config.get('import_ids', []) + opts.import_ids
+    do_import_ids(unit, import_ids, opts)
     if check_customized(unit_name, unit, opts):
         return config
     sys.stdout.write('Customizing machine...')
     sys.stdout.flush()
-    import_ids = config.get('import_ids', []) + opts.import_ids
-    for identity in import_ids:
-        call('juju', 'authorized-keys', 'import', identity)
     uploads = config.get('uploads', {})
     if isinstance(uploads, (list, tuple)):
         uploads = {u: '' for u in uploads}
@@ -148,6 +147,15 @@ def set_customized(unit_name, unit, opts):
     env = get_env(opts)
     machine = unit.get('Machine')
     env.set_annotation(machine, 'machine', {'dhx-customized': 'true'})
+
+
+def do_import_ids(unit, import_ids, opts):
+    env = get_env(opts)
+    machine = unit.get('Machine')
+    annotations = env.get_annotation(machine, 'machine')
+    if annotations['Annotations'].get('import-ids') != ','.join(import_ids):
+        call('juju', 'authorized-keys', 'import', *import_ids)
+        env.set_annotation(machine, 'machine', {'import-ids': ','.join(import_ids)})
 
 
 def get_env(opts):
@@ -297,7 +305,7 @@ if __name__ == '__main__':
         if len(args) == 0:
             fail('You must provide an address')
         addr = args[0]
-        os.execvp('ssh', ['ssh', '-t', 'ubuntu@%s' % addr, 'sudo tmux new-session -A'])
+        os.execvp('ssh', ['ssh', '-t', 'ubuntu@%s' % addr, 'sudo tmux attach'])
     else:
         unit_name, unit = choose_unit(args, opts)
         config = customize(unit_name, unit, opts)
