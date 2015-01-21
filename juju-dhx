@@ -105,7 +105,7 @@ def parse_args():
     parser.add_option('-h', '--help', action='callback', callback=show_help)
     parser.add_option('-d', '--description', action='callback', callback=show_desc)
     opts = parser.parse_args()
-    opts.config_file = find_config_file(opts.config_file)
+    parser.values.config_file = find_config_file(parser.values.config_file)
     return opts
 
 
