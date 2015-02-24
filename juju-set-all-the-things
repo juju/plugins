@@ -1,0 +1,49 @@
+#!/usr/bin/python
+import sys
+import argparse
+import subprocess
+
+from deployer.config import ConfigStack
+from jujuclient import Environment
+
+parser = argparse.ArgumentParser("Set all values from deployer configs")
+
+# juju plugin api
+class Description(argparse.Action):
+    def __call__(self, *args, **kwargs):
+        print("Parse/merge the provided deployer configs and "
+               "set every value on all services")
+        sys.exit(0)
+
+parser.add_argument(
+    '--description',
+    action=Description,
+    nargs=0,
+    help="Output a short description of the command",
+)
+
+# same args as deployer
+parser.add_argument(
+    '-c', '--config',
+    help=('File containing deployment(s) json config. This '
+          'option can be repeated, with later files overriding '
+          'values in earlier ones.'),
+    dest='configs', action='append')
+parser.add_argument(
+    '--series', type=str,
+    help=('Override distro series in config files'),
+    dest='series', default=None)
+
+parser.add_argument("deployment", nargs="?")
+options = parser.parse_args()
+
+config = ConfigStack(options.configs, options.series)
+
+env_name = subprocess.check_output(['juju', 'switch']).strip()
+env = Environment.connect(env_name)
+
+for name, svc in config.data[options.deployment]['services'].items():
+    if 'options' in svc:
+        print('Setting config for service {}'.format(name))
+        env.set_config(name, svc['options'])
+
