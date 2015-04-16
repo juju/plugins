@@ -1,0 +1,180 @@
+#!/usr/bin/env python
+
+import re
+import os
+import sys
+import yaml
+import subprocess
+import argparse
+from datetime import datetime
+
+import jujuclient
+
+
+JUJU_ENV = os.environ.get('JUJU_ENV', '')
+JUJU_REPOSITORY = os.environ.get('JUJU_REPOSITORY', '')
+
+
+class ShowDesc(argparse.Action):
+    def __init__(self, option_strings, dest, nargs=None, **kwargs):
+        super(ShowDesc, self).__init__(option_strings, dest, nargs=0, **kwargs)
+
+    def __call__(*args, **kwargs):
+        print 'Automatic syncing of local changes to deployed service'
+        sys.exit(0)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description='Automatic syncing of local changes to deployed service',
+        epilog="""
+            This will watch for changes in the local source of a deployed charm
+            and automatically push the changes up to the remote unit and retry
+            the last failed hook.  If CHARM_PATH is not given, it will look first in
+            the current directory and then in $JUJU_REPOSITORY/$SERIES/$CHARM for the
+            charm source.
+
+            Note: This requires pyinotify to be installed (pip install pyinotify)
+        """)
+    parser.add_argument('unit')
+    parser.add_argument('charm_path', nargs='?')
+    parser.add_argument('-d', '--description', action=ShowDesc, help='show description')
+    parser.add_argument('-e', '--environment', dest='env', default=JUJU_ENV,
+                        help='juju environment to operate in')
+    parser.add_argument('-R', '--no-retry', '--no-restart', dest='retry', action='store_false',
+                        help='do not automatically retry failed hooks when a change is made')
+    parser.add_argument('-q', '--quiet', action='store_true', help='suppress output')
+    opts = parser.parse_args()
+    return opts
+
+
+def fail(msg):
+    sys.stderr.write('%s\n' % msg)
+    sys.exit(1)
+
+
+def get_env(env_name=None):
+    if hasattr(get_env, '_env'):
+        return get_env._env
+    get_env._env = jujuclient.Environment.connect(env_name)
+    return get_env._env
+
+
+def parse_charm_id(charm_id):
+    charm_match = re.match(r'local:([^/]*)/(.*)-\d+', charm_id)
+    if charm_match:
+        return charm_match.groups()
+    return None, None
+
+
+def run(*args):
+    try:
+        subprocess.check_output(args, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        if 'already resolved' in e.output:
+            pass
+        else:
+            fail(e.output)
+
+
+def watch(unit_name, charm_path, retry, quiet):
+    import pyinotify
+    wm = pyinotify.WatchManager()
+    mask = pyinotify.IN_DELETE | pyinotify.IN_CREATE | pyinotify.IN_MODIFY
+
+    class EventHandler(pyinotify.ProcessEvent):
+        last_event = None
+
+        def process_default(self, event):
+            self.last_event = datetime.now()
+
+        def dispatch_update(self):
+            if self.last_event:
+                if not quiet:
+                    print 'Updating %s' % unit_name
+                update_unit(unit_name, charm_path)
+                if retry and unit_in_error(unit_name):
+                    if not quiet:
+                        print 'Retrying failed hook'
+                    restart_errored_unit(unit_name)
+                self.last_event = None
+
+    handler = EventHandler()
+    notifier = pyinotify.Notifier(wm, handler, timeout=2000)
+    wm.add_watch(charm_path, mask, rec=True)
+    if not quiet:
+        print 'Watching %s...' % charm_path
+    try:
+        while True:
+            notifier.process_events()
+            while notifier.check_events():  # process events until a timeout
+                notifier.read_events()
+                notifier.process_events()
+            handler.dispatch_update()
+    except KeyboardInterrupt:
+        pass
+
+
+def update_unit(unit_name, charm_path):
+    remote_path = '/var/lib/juju/agents/unit-%s/charm/' % unit_name.replace('/', '-')
+    run('juju', 'scp', '--', '-r', charm_path, '%s:.juju-sync-watch' % unit_name)
+    run('juju', 'ssh', unit_name, ';'.join(map('sudo {}'.format, [
+        'chown -R root:root .juju-sync-watch',
+        'cp -R .juju-sync-watch/* %s' % remote_path,
+        'rm -rf .juju-sync-watch'])))
+
+
+def unit_in_error(unit_name):
+    env = get_env()
+    service_name = unit_name.split('/')[0]
+    unit = env.status()['Services'][service_name]['Units'][unit_name]
+    return unit['AgentState'] == 'error'
+
+
+def restart_errored_unit(unit_name):
+    run('juju', 'resolved', '--retry', unit_name)
+
+
+def is_charm_dir(charm_name, charm_path):
+    metadata_yaml = os.path.join(charm_path, 'metadata.yaml')
+    if not os.path.exists(metadata_yaml):
+        return False
+    with open(metadata_yaml) as fp:
+        metadata = yaml.safe_load(fp)
+        return metadata['name'] == charm_name
+
+
+def get_charm_info(env, unit_name):
+    if '/' not in unit_name:
+        fail('Invalid unit name: %s' % unit_name)
+    service_name = unit_name.split('/')[0]
+    status = env.status()
+    services = status['Services']
+    if service_name not in services:
+        fail('Unit not found: %s' % unit_name)
+    service = services[service_name]
+    series, charm_name = parse_charm_id(service['Charm'])
+    if not series or not charm_name:
+        fail('Unable to determine series or charm_name')
+    return series, charm_name
+
+
+def find_charm(series, charm_name):
+    candidates = ['.']
+    if JUJU_REPOSITORY:
+        candidates.append('%s/%s/%s' % (JUJU_REPOSITORY, series, charm_name))
+    else:
+        candidates.append('%s/%s' % (series, charm_name))
+    for charm_path in candidates:
+        if is_charm_dir(charm_name, charm_path):
+            return charm_path
+    fail('Unable to find source path for %s' % charm_name)
+
+
+if __name__ == '__main__':
+    opts = parse_args()
+    env = get_env(opts.env)
+    series, charm_name = get_charm_info(env, opts.unit)
+    if not hasattr(opts, 'charm_dir'):
+        opts.charm_dir = find_charm(series, charm_name)
+    watch(opts.unit, opts.charm_dir, opts.retry, opts.quiet)

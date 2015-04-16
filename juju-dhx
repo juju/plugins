@@ -25,7 +25,7 @@ DEFAULT_CONFIG = {'import_ids': [],
 
 
 def show_help(option, opt, value, parser):
-    print 'usage: juju dhx [options] <unit name> [hook names]'
+    print 'usage: juju dhx [options] [<unit-or-service>]'
     print 'purpose: Enhanced interactive remote hook debugging session, using tmux'
     print
     print 'options:'
