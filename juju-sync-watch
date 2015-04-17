@@ -34,7 +34,7 @@ def parse_args():
             the current directory and then in $JUJU_REPOSITORY/$SERIES/$CHARM for the
             charm source.
 
-            Note: This requires pyinotify to be installed (pip install pyinotify)
+            Note: This requires pyinotify to be installed (pip install pyinotify).
         """)
     parser.add_argument('unit')
     parser.add_argument('charm_path', nargs='?')
@@ -69,10 +69,10 @@ def parse_charm_id(charm_id):
 
 def run(*args):
     try:
-        subprocess.check_output(args, stderr=subprocess.STDOUT)
+        return subprocess.check_output(args, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
         if 'already resolved' in e.output:
-            pass
+            return e.output
         else:
             fail(e.output)
 
@@ -84,12 +84,14 @@ def watch(unit_name, charm_path, retry, quiet):
 
     class EventHandler(pyinotify.ProcessEvent):
         last_event = None
+        changes = False
 
         def process_default(self, event):
             self.last_event = datetime.now()
 
         def dispatch_update(self):
             if self.last_event:
+                self.changes = True
                 if not quiet:
                     print 'Updating %s' % unit_name
                 update_unit(unit_name, charm_path)
@@ -112,7 +114,7 @@ def watch(unit_name, charm_path, retry, quiet):
                 notifier.process_events()
             handler.dispatch_update()
     except KeyboardInterrupt:
-        pass
+        return handler.changes
 
 
 def update_unit(unit_name, charm_path):
@@ -171,10 +173,22 @@ def find_charm(series, charm_name):
     fail('Unable to find source path for %s' % charm_name)
 
 
+def prompt_for_upgrade(unit_name):
+    service_name = unit_name.split('/')[0]
+    print
+    response = raw_input('Upgrade charm %s? [y/N] ' % service_name)
+    if response.lower().startswith('y'):
+        print run('juju', 'upgrade-charm', service_name)
+
+
 if __name__ == '__main__':
     opts = parse_args()
     env = get_env(opts.env)
     series, charm_name = get_charm_info(env, opts.unit)
     if not hasattr(opts, 'charm_dir'):
         opts.charm_dir = find_charm(series, charm_name)
-    watch(opts.unit, opts.charm_dir, opts.retry, opts.quiet)
+    changes = watch(opts.unit, opts.charm_dir, opts.retry, opts.quiet)
+
+    # this doesn't work with Juju <= 1.23 due to way plugins are subprocessed :(
+    #if changes:
+    #    prompt_for_upgrade(opts.unit)
