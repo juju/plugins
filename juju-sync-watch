@@ -93,8 +93,11 @@ def watch(unit_name, charm_path, retry, quiet):
             if self.last_event:
                 self.changes = True
                 if not quiet:
-                    print 'Updating %s' % unit_name
+                    print 'Updating %s...' % unit_name,
+                    sys.stdout.flush()
                 update_unit(unit_name, charm_path)
+                if not quiet:
+                    print 'done'
                 if retry and unit_in_error(unit_name):
                     if not quiet:
                         print 'Retrying failed hook'
@@ -105,7 +108,7 @@ def watch(unit_name, charm_path, retry, quiet):
     notifier = pyinotify.Notifier(wm, handler, timeout=2000)
     wm.add_watch(charm_path, mask, rec=True)
     if not quiet:
-        print 'Watching %s...' % charm_path
+        print 'Watching %s' % charm_path
     try:
         while True:
             notifier.process_events()
@@ -129,7 +132,13 @@ def update_unit(unit_name, charm_path):
 def unit_in_error(unit_name):
     env = get_env()
     service_name = unit_name.split('/')[0]
-    unit = env.status()['Services'][service_name]['Units'][unit_name]
+    status = env.status()
+    service = status['Services'][service_name]
+    if service.get('SubordinateTo'):
+        service = status['Services'][service['SubordinateTo'][0]]
+        unit = filter(None, [unit['Subordinates'].get(unit_name) for unit in service['Units'].values()])[0]
+    else:
+        unit = service['Units'][unit_name]
     return unit['AgentState'] == 'error'
 
 
