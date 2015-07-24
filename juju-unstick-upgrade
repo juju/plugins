@@ -1,0 +1,177 @@
+#!/usr/bin/env python
+#
+# Copyright 2015 Menno Smits <menno.smits@canonical.com>
+#
+# juju-unstick-upgrade is free software: you can redistribute it
+# and/or modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation, either version 3 of
+# the License, or (at your option) any later version.
+#
+# juju-unstick-upgrade is distributed in the hope that it will be
+# useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+# of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# For a full copy of the GNU General Public License, see
+# <http://www.gnu.org/licenses/>.
+
+import argparse
+import os
+import re
+import subprocess
+import sys
+
+
+DEFAULT_TOOLS_DIR = '/var/lib/juju/tools'
+VALID_VERSION = re.compile(r"^\d{1,9}\.\d{1,9}(\.|-(\w+))\d{1,9}(\.\d{1,9})?$")
+
+SHORT_DESCRIPTION="Allow an upgrade to continue if the state server machine agents are not able to restart"
+
+LONG_DESCRIPTION="""\
+Allow a Juju upgrade to continue if the state server machine agents
+are not able to restart. This is a workaround for problems in Juju
+1.23, 1.24.0 and 1.24.1.
+
+To use, start the upgrade as normal with "juju upgrade-juju". When the
+state servers appear to be stuck run "juju unstick-upgrade", supplying
+the version being upgraded to.
+"""
+
+
+def process_args():
+    args = sys.argv[1:]
+    if len(args) == 1 and args[0] == '--description':
+        print SHORT_DESCRIPTION
+        sys.exit(0)
+
+    parser = argparse.ArgumentParser(description=LONG_DESCRIPTION)
+    parser.add_argument('target_version', type=check_version,
+                        help='the Juju version being upgraded to')
+    return parser.parse_args()
+
+
+def check_version(version):
+    if not VALID_VERSION.match(version):
+        raise argparse.ArgumentTypeError("invalid version. valid examples: 1.23.0, 1.25-alpha1.2")
+    return version
+
+
+def get_state_server_addrs():
+    output = subprocess.check_output(['juju', 'api-info', 'state-servers'])
+    return [line.split(':')[0] for line in output.strip().split('\n')]
+
+
+def fix_local_environment(target_version):
+    # The process to fix a local provider environment is somewhat
+    # different (only one state server, no ssh)
+    tools_dir = os.path.join(get_juju_home(), get_env_name(), "tools")
+    run_fix(["sudo", "/bin/bash"], "machine-0", target_version, tools_dir)
+
+
+def fix_environment(version, addrs):
+    seen_agents = set()
+    for addr in addrs:
+        print "\nchecking " + addr
+        agents = detect_agent(addr)
+        if not agents:
+            print "no machine agent found on {0}, skipping".format(addr)
+            continue
+        elif len(agents) > 1:
+            print "multiple machine agents found on {0}, skipping".format(addr)
+            continue
+
+        agent = agents[0]
+        print "{0} is {1}".format(addr, agent)
+        if agent in seen_agents:
+            print "{0} has already been fixed, skipping".format(agent)
+            continue
+
+        run_fix(make_ssh_args(addr, 'sudo /bin/bash'), agent, version, DEFAULT_TOOLS_DIR)
+        print "{0} fixed".format(agent)
+        seen_agents.add(agent)
+
+
+
+def detect_agent(addr):
+    args = make_ssh_args(addr, 'ls -1d {0}/machine-*'.format(DEFAULT_TOOLS_DIR))
+    try:
+        output = subprocess.check_output(args)
+    except:
+        return []
+    return [line.rsplit('/', 1)[-1] for line in output.splitlines()]
+
+
+def make_ssh_args(addr, cmd):
+    return [
+        'ssh',
+        '-o', 'ConnectTimeout 20s',
+        '-o', 'StrictHostKeyChecking no',
+        'ubuntu@'+addr,
+        cmd,
+    ]
+
+
+def run_fix(host_cmd, machine_tag, version, tools_dir):
+    script = create_fix_script(machine_tag, version, tools_dir)
+    p = subprocess.Popen(
+        host_cmd,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    output, _ = p.communicate(input=script)
+    if p.returncode:
+        fatal("fix failed with:\n{0}".format(output))
+
+
+def create_fix_script(machine_tag, version, tools_dir):
+    return """
+function die() {{
+    echo $1
+    exit 1
+}}
+
+cd {tools_dir} || die "couldn't change to tools directory"
+if [ `ls -1d {version}-*-* | wc -l` -ne 1 ]; then
+    die "error locating tools"
+fi
+ln --symbolic --force {version}-*-* {machine_tag} || die "symlink switch failed"
+pkill jujud || die "could not kill machine agent"
+""".format(machine_tag=machine_tag, version=version, tools_dir=tools_dir)
+
+
+def get_env_name():
+    return subprocess.check_output(['juju', 'switch']).strip()
+
+
+def is_local_provider(addrs):
+    return any(addr == 'localhost' for addr in addrs)
+
+
+def get_juju_home():
+    return os.environ.get("JUJU_HOME", os.path.expanduser("~/.juju"))
+
+
+def fatal(message):
+    sys.stderr.write(message + "\n")
+    sys.exit(1)
+
+
+def main():
+    args = process_args()
+
+    addrs = get_state_server_addrs()
+    if not addrs:
+        fatal("unable to locate state server addresses")
+    addrs.append(addrs[0])
+
+    if is_local_provider(addrs):
+        print "fixing local environment upgrade"
+        fix_local_environment(args.target_version)
+    else:
+        fix_environment(args.target_version, addrs)
+    print "\nfix complete"
+
+
+if __name__ == '__main__':
+    main()
