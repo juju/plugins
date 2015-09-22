@@ -1,0 +1,32 @@
+#!/bin/bash
+# Copyright 2015 Marco Ceppi <marco@ceppi.net>
+#
+# juju-flags is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# juju-flags is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# For a full copy of the GNU General Public License, see
+# <http://www.gnu.org/licenses/>.
+
+set -e
+
+if [ "$1" == '--description' ]; then
+    echo "List juju dev flags used in environment"
+    exit 0
+fi
+
+if [ "$1" == '--help' ]; then
+    echo "juju flags"
+    echo ""
+    echo "List flags used in an environment"
+    exit 0
+fi
+
+# Check for upstart, otherwise check process
+juju ssh 0 "if [ -f /etc/init/jujud-machine-0.conf ]; then grep JUJU_DEV_FEATURE_FLAGS /etc/init/jujud-machine-0.conf | awk -F'\"' '{ print \$2 }'; else ps -ae -o command= | grep [j]ujud | grep JUJU_DEV_FEATURE_FLAGS | awk -f'\"' '{ print \$2 }'; fi" 2>/dev/null
