@@ -11,8 +11,11 @@ from datetime import datetime
 import jujuclient
 
 
-JUJU_ENV = os.environ.get('JUJU_ENV', '')
 JUJU_REPOSITORY = os.environ.get('JUJU_REPOSITORY', '')
+
+
+def current_environment():
+    return subprocess.check_output(['juju', 'switch']).strip()
 
 
 class ShowDesc(argparse.Action):
@@ -39,8 +42,9 @@ def parse_args():
     parser.add_argument('unit')
     parser.add_argument('charm_path', nargs='?')
     parser.add_argument('-d', '--description', action=ShowDesc, help='show description')
-    parser.add_argument('-e', '--environment', dest='env', default=JUJU_ENV,
-                        help='juju environment to operate in')
+    parser.add_argument('-e', '--environment', dest='env', default=current_environment(),
+                        help='Juju environment or model name. Defaults to the value '
+                             'obtained from `juju switch`')
     parser.add_argument('-R', '--no-retry', '--no-restart', dest='retry', action='store_false',
                         help='do not automatically retry failed hooks when a change is made')
     parser.add_argument('-q', '--quiet', action='store_true', help='suppress output')
@@ -139,7 +143,11 @@ def unit_in_error(unit_name):
         unit = filter(None, [unit['Subordinates'].get(unit_name) for unit in service['Units'].values()])[0]
     else:
         unit = service['Units'][unit_name]
-    return unit['AgentState'] == 'error'
+    unit_status = (
+        unit.get('AgentState') or  # juju1
+        unit.get('WorkloadStatus', {}).get('Status')  # juju2
+    )
+    return unit_status == 'error'
 
 
 def restart_errored_unit(unit_name):
@@ -193,10 +201,10 @@ def prompt_for_upgrade(unit_name):
 if __name__ == '__main__':
     opts = parse_args()
     env = get_env(opts.env)
-    series, charm_name = get_charm_info(env, opts.unit)
-    if not hasattr(opts, 'charm_dir'):
-        opts.charm_dir = find_charm(series, charm_name)
-    changes = watch(opts.unit, opts.charm_dir, opts.retry, opts.quiet)
+    if not hasattr(opts, 'charm_path'):
+        series, charm_name = get_charm_info(env, opts.unit)
+        opts.charm_path = find_charm(series, charm_name)
+    changes = watch(opts.unit, opts.charm_path, opts.retry, opts.quiet)
 
     # this doesn't work with Juju <= 1.23 due to way plugins are subprocessed :(
     #if changes:
