@@ -11,7 +11,6 @@ from optparse import OptionParser
 import jujuclient
 
 
-JUJU_ENV = os.environ.get('JUJU_ENV', '')
 JUJU_HOME = os.environ.get('JUJU_HOME', '')
 CONFIG_FILE = os.path.join(JUJU_HOME, 'dhx-rc.yaml')
 ALT_CONFIG_FILE = os.path.join(JUJU_HOME, 'debug-hooks-rc.yaml')
@@ -22,6 +21,20 @@ DEFAULT_CONFIG = {'import_ids': [],
                   'auto_sync': False,
                   'auto_restart': False,
                   'sync_exclude': ['*.pyc', '.*']}
+
+
+def call(*args):
+    try:
+        return subprocess.check_output(('/usr/bin/env',) + args,
+                                       stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        sys.stderr.write(e.output)
+        sys.exit(e.returncode)
+
+
+JUJU_ENV = call('juju', 'switch').rstrip('\n').split(':')[1]
+JUJU_VERSION = call('juju', 'version')
+JUJU_2 = JUJU_VERSION.startswith('2.')
 
 
 def show_help(option, opt, value, parser):
@@ -172,7 +185,13 @@ def do_import_ids(unit, import_ids, opts):
     machine = unit.get('Machine')
     annotations = env.get_annotation(machine, 'machine')
     if annotations['Annotations'].get('import-ids') != ','.join(import_ids):
-        call('juju', 'authorized-keys', 'import', *import_ids)
+        cmd = ['juju']
+        if JUJU_2:
+            cmd.append('import-ssh-keys')
+        else:
+            cmd.extend(['authorized-keys', 'import'])
+        cmd.extend(import_ids)
+        call(*cmd)
         env.set_annotation(machine, 'machine', {'import-ids': ','.join(import_ids)})
 
 
@@ -183,20 +202,18 @@ def get_env(opts):
     return get_env._env
 
 
-def call(*args):
-    try:
-        return subprocess.check_output(('/usr/bin/env',) + args,
-                                       stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError as e:
-        sys.stderr.write(e.output)
-        sys.exit(e.returncode)
+def _unit_errored(unit):
+    if JUJU_2:
+        return unit['WorkloadStatus']['Status'] == 'error'
+    else:
+        return unit['AgentState'] == 'error'
 
 
 def find_errored_unit(units):
     if not units:
         return None
     for name, unit in units.items():
-        if unit['AgentState'] == 'error':
+        if _unit_errored(unit):
             return name
     return None
 
@@ -259,7 +276,7 @@ def choose_unit_from(all_units, preferred_units=None):
     print 'Units:'
     for i, unit_name in enumerate(unit_names):
         unit_err = ''
-        if all_units[unit_name]['AgentState'] == 'error':
+        if _unit_errored(all_units[unit_name]):
             unit_err = ' (error)'
         print '  %d: %s%s' % (i, unit_name, unit_err)
     print
@@ -327,12 +344,13 @@ if __name__ == '__main__':
     else:
         unit_name, unit = choose_unit(args, opts)
         config = customize(unit_name, unit, opts)
+        model_opt = '-m' if JUJU_2 else '-e'
         if (opts.restart or config.get('auto_restart', False)) and not opts.no_restart:
             subprocess.Popen(
-                'sleep 2 ; juju resolved --retry -e %s "%s"' % (opts.env, unit_name),
+                'sleep 2 ; juju resolved --retry %s %s "%s"' % (model_opt, opts.env, unit_name),
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
         result = subprocess.call(
-            ['/usr/bin/env', 'juju', 'debug-hooks', '-e', opts.env, unit_name] + args)
+            ['/usr/bin/env', 'juju', 'debug-hooks', model_opt, opts.env, unit_name] + args)
         if result != 0:
             sys.exit(result)
         if (opts.sync or config.get('auto_sync', False)) and not opts.no_sync:
