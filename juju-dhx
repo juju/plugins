@@ -32,7 +32,7 @@ def call(*args):
         sys.exit(e.returncode)
 
 
-JUJU_ENV = call('juju', 'switch').rstrip('\n').split(':')[1]
+JUJU_ENV = call('juju', 'switch').rstrip('\n').split(':')[-1]
 JUJU_VERSION = call('juju', 'version')
 JUJU_2 = JUJU_VERSION.startswith('2.')
 
