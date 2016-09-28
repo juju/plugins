@@ -1,0 +1,14 @@
+#!/bin/bash
+
+if [ "$1" == "--description" ]; then
+  echo "Watch Juju status with potential filters"
+  exit 0
+elif [ "$1" == "--help" ]; then
+  echo "juju watch-status (status filters)"
+  echo ""
+  echo "Watch the output of Juju Status"
+  exit 0
+fi
+
+
+watch -c juju status --color "${@:1}"
