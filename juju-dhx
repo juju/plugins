@@ -9,6 +9,8 @@ import itertools
 from optparse import OptionParser
 
 import jujuclient
+import jujuclient.juju1.environment
+import jujuclient.juju2.environment
 
 
 JUJU_HOME = os.environ.get('JUJU_HOME', '')
@@ -32,9 +34,27 @@ def call(*args):
         sys.exit(e.returncode)
 
 
-JUJU_ENV = call('juju', 'switch').rstrip('\n').split(':')[-1]
+JUJU_ENV = call('juju', 'switch').rstrip('\n')
 JUJU_VERSION = call('juju', 'version')
 JUJU_2 = JUJU_VERSION.startswith('2.')
+
+
+class CaseInsensitiveDict(dict):
+    def __init__(self, *args, **kwargs):
+        super(CaseInsensitiveDict, self).__init__(*args, **kwargs)
+        for key in self.keys():
+            if isinstance(self[key], dict):
+                self[key] = CaseInsensitiveDict(self[key])
+
+    def __getitem__(self, key):
+        if key.lower() in self:
+            key = key.lower()
+        return super(CaseInsensitiveDict, self).__getitem__(key)
+
+    def get(self, key, default=None):
+        if key.lower() in self:
+            key = key.lower()
+        return super(CaseInsensitiveDict, self).get(key, default)
 
 
 def show_help(option, opt, value, parser):
@@ -168,8 +188,8 @@ def customize(unit_name, unit, opts):
 def check_customized(unit_name, unit, opts):
     env = get_env(opts)
     machine = unit.get('Machine')
-    annotations = env.get_annotation(machine, 'machine')
-    return 'dhx-customized' in annotations['Annotations']
+    annotations = env.get_annotation(machine, 'machine')['Annotations'] or {}
+    return 'dhx-customized' in annotations
 
 
 def set_customized(unit_name, unit, opts):
@@ -183,11 +203,13 @@ def do_import_ids(unit, import_ids, opts):
         return
     env = get_env(opts)
     machine = unit.get('Machine')
-    annotations = env.get_annotation(machine, 'machine')
-    if annotations['Annotations'].get('import-ids') != ','.join(import_ids):
+    annotations = env.get_annotation(machine, 'machine')['Annotations'] or {}
+    import_ids = ['lp:{}'.format(iid) if ':' not in iid else iid
+                  for iid in import_ids]
+    if annotations.get('import-ids') != ','.join(import_ids):
         cmd = ['juju']
         if JUJU_2:
-            cmd.append('import-ssh-keys')
+            cmd.append('import-ssh-key')
         else:
             cmd.extend(['authorized-keys', 'import'])
         cmd.extend(import_ids)
@@ -198,13 +220,16 @@ def do_import_ids(unit, import_ids, opts):
 def get_env(opts):
     if hasattr(get_env, '_env'):
         return get_env._env
-    get_env._env = jujuclient.Environment.connect(opts.env)
+    if JUJU_2:
+        get_env._env = jujuclient.juju2.environment.Environment.connect(opts.env)
+    else:
+        get_env._env = jujuclient.juju1.environment.Environment.connect(opts.env)
     return get_env._env
 
 
 def _unit_errored(unit):
     if JUJU_2:
-        return unit['WorkloadStatus']['Status'] == 'error'
+        return unit['workload-status']['status'] == 'error'
     else:
         return unit['AgentState'] == 'error'
 
@@ -294,8 +319,8 @@ def choose_unit_from(all_units, preferred_units=None):
 
 
 def get_all_units(status):
-    services = status['Services']
-    units = {n: dict(u, Charm=s.get('Charm'))
+    services = CaseInsensitiveDict(status.get('applications', status.get('Services')))
+    units = {n: CaseInsensitiveDict(u, Charm=s.get('Charm'))
              for s in services.values() if s.get('Units')
              for n, u in s['Units'].iteritems()}
     subordinates = {}
@@ -310,8 +335,8 @@ def get_all_units(status):
 
 def choose_unit(args, opts):
     unit = args.pop(0) if args else None
-    status = get_env(opts).status()
-    services = status['Services']
+    status = CaseInsensitiveDict(get_env(opts).status())
+    services = status.get('applications', status.get('Services'))
     units = get_all_units(status)
     if not units:
         fail('No units available')
