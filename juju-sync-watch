@@ -9,13 +9,23 @@ import argparse
 from datetime import datetime
 
 import jujuclient
+import jujuclient.juju1.environment
+import jujuclient.juju2.environment
+
+
+def call(*args):
+     try:
+         return subprocess.check_output(('/usr/bin/env',) + args,
+                                        stderr=subprocess.STDOUT)
+     except subprocess.CalledProcessError as e:
+         sys.stderr.write(e.output)
+         sys.exit(e.returncode)
 
 
 JUJU_REPOSITORY = os.environ.get('JUJU_REPOSITORY', '')
-
-
-def current_environment():
-    return subprocess.check_output(['juju', 'switch']).strip()
+JUJU_ENV = call('juju', 'switch').rstrip('\n')
+JUJU_VERSION = call('juju', 'version')
+JUJU_2 = JUJU_VERSION.startswith('2.')
 
 
 class ShowDesc(argparse.Action):
@@ -42,7 +52,7 @@ def parse_args():
     parser.add_argument('unit')
     parser.add_argument('charm_path', nargs='?')
     parser.add_argument('-d', '--description', action=ShowDesc, help='show description')
-    parser.add_argument('-e', '--environment', dest='env', default=current_environment(),
+    parser.add_argument('-e', '--environment', dest='env', default=JUJU_ENV,
                         help='Juju environment or model name. Defaults to the value '
                              'obtained from `juju switch`')
     parser.add_argument('-R', '--no-retry', '--no-restart', dest='retry', action='store_false',
@@ -60,7 +70,10 @@ def fail(msg):
 def get_env(env_name=None):
     if hasattr(get_env, '_env'):
         return get_env._env
-    get_env._env = jujuclient.Environment.connect(env_name)
+    if JUJU_2:
+        get_env._env = jujuclient.juju2.environment.Environment.connect(opts.env)
+    else:
+        get_env._env = jujuclient.juju1.environment.Environment.connect(opts.env)
     return get_env._env
 
 
@@ -137,12 +150,22 @@ def unit_in_error(unit_name):
     env = get_env()
     service_name = unit_name.split('/')[0]
     status = env.status()
-    service = status['Services'][service_name]
-    if service.get('SubordinateTo'):
-        service = status['Services'][service['SubordinateTo'][0]]
-        unit = filter(None, [unit['Subordinates'].get(unit_name) for unit in service['Units'].values()])[0]
+    if JUJU_2:
+        service = status['applications'][service_name]
+        if service.get('subordinate-to'):
+            service = status['applications'][service['subordinate-to'][0]]
+            unit = filter(None, [unit['subordinates'].get(unit_name) for unit in service['units'].values()])[0]
+        else:
+            unit = service['units'][unit_name]
     else:
-        unit = service['Units'][unit_name]
+        service = status['Services'][service_name]
+        if service.get('SubordinateTo'):
+            service = status['Services'][service['SubordinateTo'][0]]
+            unit = filter(None, [unit['Subordinates'].get(unit_name) for unit in service['Units'].values()])[0]
+        else:
+            unit = service['Units'][unit_name]
+
+
     unit_status = (
         unit.get('AgentState') or  # juju1
         unit.get('WorkloadStatus', {}).get('Status')  # juju2
@@ -151,7 +174,10 @@ def unit_in_error(unit_name):
 
 
 def restart_errored_unit(unit_name):
-    run('juju', 'resolved', '--retry', unit_name)
+    if JUJU_2:
+        run('juju', 'resolved', unit_name)
+    else:
+        run('juju', 'resolved', '--retry', unit_name)
 
 
 def is_charm_dir(charm_name, charm_path):
