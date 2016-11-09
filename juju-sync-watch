@@ -157,6 +157,7 @@ def unit_in_error(unit_name):
             unit = filter(None, [unit['subordinates'].get(unit_name) for unit in service['units'].values()])[0]
         else:
             unit = service['units'][unit_name]
+        unit_status = unit.get('workload-status', {}).get('status')
     else:
         service = status['Services'][service_name]
         if service.get('SubordinateTo'):
@@ -164,12 +165,8 @@ def unit_in_error(unit_name):
             unit = filter(None, [unit['Subordinates'].get(unit_name) for unit in service['Units'].values()])[0]
         else:
             unit = service['Units'][unit_name]
+        unit_status = unit.get('AgentState')
 
-
-    unit_status = (
-        unit.get('AgentState') or  # juju1
-        unit.get('WorkloadStatus', {}).get('Status')  # juju2
-    )
     return unit_status == 'error'
 
 
