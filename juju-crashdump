@@ -1,5 +1,5 @@
 #!/usr/bin/env python2
-# this is python2/3 compatible, but the following bug breaks us... 
+# this is python2/3 compatible, but the following bug breaks us...
 # https://bugs.launchpad.net/ubuntu/+source/python-launchpadlib/+bug/1425575
 
 # you also might need to $ sudo apt install python-apport
@@ -40,7 +40,7 @@ DIRECTORIES = [
 ]
 
 TAR_CMD = """sudo find {dirs} -mount -type f -size -{max_size}c -o \
--size {max_size}c 2>/dev/null | sudo tar -pcf /tmp/juju-dump-{uuid}.tar \
+-size {max_size}c 2>/dev/null | sudo tar -pcf /tmp/juju-dump-{uniq}.tar \
 --files-from - 2>/dev/null"""
 
 
@@ -104,7 +104,7 @@ def juju_debuglog():
 
 class CrashCollector(object):
     """A log file collector for juju and charms"""
-    def __init__(self, model, max_size, extra_dirs):
+    def __init__(self, model, max_size, extra_dirs, output_dir=None, uniq=None):
         if model:
             set_model(model)
         self.max_size = max_size
@@ -112,7 +112,8 @@ class CrashCollector(object):
         self.cwd = os.getcwd()
         self.tempdir = tempfile.mkdtemp(dir=expanduser('~'))
         os.chdir(self.tempdir)
-        self.uuid = uuid.uuid4()
+        self.uniq = uniq or uuid.uuid4()
+        self.output_dir = output_dir or '.'
 
     def create_unit_tarballs(self):
         directories = list(DIRECTORIES)
@@ -121,16 +122,16 @@ class CrashCollector(object):
             ['/var/lib/lxd/containers/*/rootfs' + item for item in directories]
         )
         tar_cmd = TAR_CMD.format(dirs=" ".join(directories),
-                                 max_size=self.max_size, uuid=self.uuid)
+                                 max_size=self.max_size, uniq=self.uniq)
         run_cmd("""timeout 30s juju run --all 'sh -c "%s"'""" % tar_cmd)
 
     def retrieve_unit_tarballs(self):
         juju_status = yaml.load(open('juju_status.yaml', 'r'))
-        aliases, units = service_unit_addresses(juju_status) 
+        aliases, units = service_unit_addresses(juju_status)
         for ip, alias_group in aliases.items():
             any_unit = alias_group.intersection(units).pop()
-            juju_cmd("scp %s:/tmp/juju-dump-%s.tar ." % (any_unit, self.uuid))
-            shutil.move("juju-dump-%s.tar" % self.uuid, "%s.tar" % ip)
+            juju_cmd("scp %s:/tmp/juju-dump-%s.tar ." % (any_unit, self.uniq))
+            shutil.move("juju-dump-%s.tar" % self.uniq, "%s.tar" % ip)
             for alias in alias_group:
                 os.symlink('%s.tar' % ip, '%s.tar' % alias.replace('/', '_'))
 
@@ -139,12 +140,12 @@ class CrashCollector(object):
         juju_debuglog()
         self.create_unit_tarballs()
         self.retrieve_unit_tarballs()
-        tar_file = "juju-crashdump-%s.tar" % self.uuid
+        tar_file = "juju-crashdump-%s.tar" % self.uniq
         run_cmd("tar -pcf %s * 2>/dev/null" % tar_file)
         run_cmd("gzip --force %s" % tar_file)
         os.chdir(self.cwd)
         gzipped_file = tar_file + '.gz'
-        shutil.move(os.path.join(self.tempdir, gzipped_file), '.')
+        shutil.move(os.path.join(self.tempdir, gzipped_file), self.output_dir)
         self.cleanup()
         return gzipped_file
 
@@ -158,7 +159,7 @@ def upload_file_to_bug(bugnum, file_):
         print(dedent("""
             You are not the reporter or subscriber of this problem report,
             or the report is a duplicate or already closed.
-            
+
             Please create a new report on https://bugs.launchpad.net/charms.
             """))
         return False
@@ -196,13 +197,23 @@ def parse_args():
                         help='Upload crashdump to the given launchpad bug #')
     parser.add_argument('extra_dir', nargs='*', default=[],
                         help='Extra directories to snapshot')
+    parser.add_argument('-o', '--output-dir',
+                        help="Store the completed crash dump in this dir.")
+    parser.add_argument('-u', '--uniq',
+                        help="Unique id for this crashdump. "
+                        "We generate a uuid if this is not specified.")
     return parser.parse_args()
 
 
 def main():
     opts = parse_args()
-    collector = CrashCollector(model=opts.model, max_size=opts.max_file_size,
-                               extra_dirs=opts.extra_dir)
+    collector = CrashCollector(
+        model=opts.model,
+        max_size=opts.max_file_size,
+        extra_dirs=opts.extra_dir,
+        output_dir=opts.output_dir,
+        uniq=opts.uniq
+    )
     filename = collector.collect()
     if opts.bug:
         upload_file_to_bug(opts.bug, filename)
