@@ -4,11 +4,14 @@ if [ "$1" == "--description" ]; then
   echo "Watch Juju status with potential filters"
   exit 0
 elif [ "$1" == "--help" ]; then
-  echo "juju watch-status (status filters)"
+  echo "usage: juju watch-status [<filter>...]"
   echo ""
-  echo "Watch the output of Juju Status"
+  echo "Watch the output of Juju status. For info"
+  echo "on which filters are available, check"
+  echo ""
+  echo "    juju help status"
   exit 0
 fi
 
 
-watch -c juju status --color "${@:1}"
+watch -tc juju status --color "${@:1}"
